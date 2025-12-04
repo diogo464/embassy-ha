@@ -95,3 +95,7 @@ pub const HA_DEVICE_CLASS_BUTTON_UPDATE: &str = "update";
 
 pub const HA_DEVICE_CLASS_SWITCH_OUTLET: &str = "outlet";
 pub const HA_DEVICE_CLASS_SWITCH_SWITCH: &str = "switch";
+
+pub const HA_UNIT_TEMPERATURE_CELSIUS: &str = "°C";
+pub const HA_UNIT_TEMPERATURE_KELVIN: &str = "K";
+pub const HA_UNIT_TEMPERATURE_FAHRENHEIT: &str = "°F";

@@ -8,11 +8,10 @@ pub enum TemperatureUnit {
 
 impl TemperatureUnit {
     pub fn as_str(&self) -> &'static str {
-        // TODO: improve
         match self {
-            TemperatureUnit::Celcius => "C",
-            TemperatureUnit::Kelvin => "k",
-            TemperatureUnit::Fahrenheit => "F",
+            TemperatureUnit::Celcius => crate::constants::HA_UNIT_TEMPERATURE_CELSIUS,
+            TemperatureUnit::Kelvin => crate::constants::HA_UNIT_TEMPERATURE_KELVIN,
+            TemperatureUnit::Fahrenheit => crate::constants::HA_UNIT_TEMPERATURE_FAHRENHEIT,
             TemperatureUnit::Other(other) => other,
         }
     }
