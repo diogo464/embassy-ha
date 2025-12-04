@@ -660,7 +660,7 @@ impl<'a> Device<'a> {
 
     async fn run_iteration<T: Transport>(&mut self, transport: T) {
         let mut client = embedded_mqtt::Client::new(self.mqtt_resources, transport);
-        client.connect("embassy-ha-client-id").await.unwrap();
+        client.connect(self.config.device_id).await.unwrap();
 
         defmt::info!("sending discover messages");
         let device_discovery = DeviceDiscovery {
