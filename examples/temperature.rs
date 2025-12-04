@@ -21,19 +21,34 @@ async fn main_task(spawner: Spawner) {
         },
     );
 
-    let temperature_sensor = device.create_temperature_sensor(
-        "temperature-sensor-id",
-        "Temperature Sensor Name",
+    let constant_temperature_sensor = device.create_temperature_sensor(
+        "constant-temperature-sensor-id",
+        "Constant Temperature Sensor",
         embassy_ha::TemperatureUnit::Celcius,
     );
 
-    spawner.must_spawn(temperature(temperature_sensor));
+    let random_temperature_sensor = device.create_temperature_sensor(
+        "random-temperature-sensor-id",
+        "Random Temperature Sensor",
+        embassy_ha::TemperatureUnit::Celcius,
+    );
+
+    spawner.must_spawn(constant_temperature_task(constant_temperature_sensor));
+    spawner.must_spawn(random_temperature_task(random_temperature_sensor));
 
     device.run(&mut stream).await;
 }
 
 #[embassy_executor::task]
-async fn temperature(mut sensor: embassy_ha::TemperatureSensor<'static>) {
+async fn constant_temperature_task(mut sensor: embassy_ha::TemperatureSensor<'static>) {
+    loop {
+        sensor.publish(42.0);
+        Timer::after_secs(1).await;
+    }
+}
+
+#[embassy_executor::task]
+async fn random_temperature_task(mut sensor: embassy_ha::TemperatureSensor<'static>) {
     loop {
         sensor.publish(rand::random_range(0.0..50.0));
         Timer::after_secs(1).await;
