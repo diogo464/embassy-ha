@@ -129,3 +129,6 @@ pub const HA_ENTITY_CATEGORY_DIAGNOSTIC: &str = "diagnostic";
 
 pub const HA_SWITCH_STATE_ON: &str = "ON";
 pub const HA_SWITCH_STATE_OFF: &str = "OFF";
+
+pub const HA_BINARY_SENSOR_STATE_ON: &str = "ON";
+pub const HA_BINARY_SENSOR_STATE_OFF: &str = "OFF";

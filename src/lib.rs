@@ -213,6 +213,13 @@ impl SwitchState {
             Self::Off => constants::HA_SWITCH_STATE_OFF,
         }
     }
+
+    pub fn flip(self) -> Self {
+        match self {
+            Self::On => Self::Off,
+            Self::Off => Self::On,
+        }
+    }
 }
 
 impl core::fmt::Display for SwitchState {
@@ -253,23 +260,13 @@ impl<'a> Switch<'a> {
     }
 
     pub fn toggle(&mut self) -> SwitchState {
-        let curr_state = self.state().unwrap_or(SwitchState::Off);
-        let new_state = match curr_state {
-            SwitchState::On => SwitchState::Off,
-            SwitchState::Off => SwitchState::On,
-        };
+        let new_state = self.state().unwrap_or(SwitchState::Off).flip();
         self.set(new_state);
         new_state
     }
 
     pub fn set(&mut self, state: SwitchState) {
-        self.0.publish(
-            match state {
-                SwitchState::On => constants::HA_SWITCH_STATE_ON,
-                SwitchState::Off => constants::HA_SWITCH_STATE_OFF,
-            }
-            .as_bytes(),
-        );
+        self.0.publish(state.as_str().as_bytes());
     }
 
     pub async fn wait(&mut self) -> SwitchState {
@@ -279,6 +276,79 @@ impl<'a> Switch<'a> {
                 return state;
             }
         }
+    }
+}
+
+pub struct InvalidBinarySensorState;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BinarySensorState {
+    On,
+    Off,
+}
+
+impl BinarySensorState {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::On => constants::HA_BINARY_SENSOR_STATE_ON,
+            Self::Off => constants::HA_BINARY_SENSOR_STATE_OFF,
+        }
+    }
+
+    pub fn flip(self) -> Self {
+        match self {
+            Self::On => Self::Off,
+            Self::Off => Self::On,
+        }
+    }
+}
+
+impl core::fmt::Display for BinarySensorState {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for BinarySensorState {
+    type Err = InvalidBinarySensorState;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.eq_ignore_ascii_case(constants::HA_BINARY_SENSOR_STATE_ON) {
+            return Ok(Self::On);
+        }
+        if s.eq_ignore_ascii_case(constants::HA_BINARY_SENSOR_STATE_OFF) {
+            return Ok(Self::Off);
+        }
+        Err(InvalidBinarySensorState)
+    }
+}
+
+impl TryFrom<&[u8]> for BinarySensorState {
+    type Error = InvalidBinarySensorState;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        let string = str::from_utf8(value).map_err(|_| InvalidBinarySensorState)?;
+        string.parse()
+    }
+}
+
+pub struct BinarySensor<'a>(Entity<'a>);
+
+impl<'a> BinarySensor<'a> {
+    pub fn set(&mut self, state: BinarySensorState) {
+        self.0.publish(state.as_str().as_bytes());
+    }
+
+    pub fn value(&self) -> Option<BinarySensorState> {
+        self.0
+            .with_data(|data| BinarySensorState::try_from(data.publish_value.as_slice()))
+            .ok()
+    }
+
+    pub fn toggle(&mut self) -> BinarySensorState {
+        let new_state = self.value().unwrap_or(BinarySensorState::Off).flip();
+        self.set(new_state);
+        new_state
     }
 }
 
@@ -485,6 +555,22 @@ impl<'a> Device<'a> {
             ..Default::default()
         });
         Switch(entity)
+    }
+
+    pub fn create_binary_sensor(
+        &self,
+        id: &'static str,
+        name: &'static str,
+        class: &'static str,
+    ) -> BinarySensor<'a> {
+        let entity = self.create_entity(EntityConfig {
+            id,
+            name,
+            domain: constants::HA_DOMAIN_BINARY_SENSOR,
+            device_class: Some(class),
+            ..Default::default()
+        });
+        BinarySensor(entity)
     }
 
     pub async fn run<T: Transport>(&mut self, transport: &mut T) -> ! {
