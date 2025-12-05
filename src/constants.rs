@@ -124,6 +124,23 @@ pub const HA_UNIT_DISTANCE_CENTIMETER: &str = "cm";
 pub const HA_UNIT_DISTANCE_METER: &str = "m";
 pub const HA_UNIT_DISTANCE_KILOMETER: &str = "km";
 
+pub const HA_UNIT_CURRENCY_USD: &str = "USD";
+pub const HA_UNIT_CURRENCY_EUR: &str = "EUR";
+pub const HA_UNIT_CURRENCY_GBP: &str = "GBP";
+pub const HA_UNIT_CURRENCY_JPY: &str = "JPY";
+pub const HA_UNIT_CURRENCY_CNY: &str = "CNY";
+pub const HA_UNIT_CURRENCY_CAD: &str = "CAD";
+pub const HA_UNIT_CURRENCY_AUD: &str = "AUD";
+pub const HA_UNIT_CURRENCY_CHF: &str = "CHF";
+pub const HA_UNIT_CURRENCY_INR: &str = "INR";
+pub const HA_UNIT_CURRENCY_BRL: &str = "BRL";
+
+pub const HA_UNIT_CURRENCY_DOLLAR: &str = "$";
+pub const HA_UNIT_CURRENCY_EURO: &str = "€";
+pub const HA_UNIT_CURRENCY_POUND: &str = "£";
+pub const HA_UNIT_CURRENCY_YEN: &str = "¥";
+pub const HA_UNIT_CURRENCY_CENT: &str = "¢";
+
 pub const HA_ENTITY_CATEGORY_CONFIG: &str = "config";
 pub const HA_ENTITY_CATEGORY_DIAGNOSTIC: &str = "diagnostic";
 
