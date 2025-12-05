@@ -401,6 +401,19 @@ impl<'a> Entity<'a> {
         self.waker.wake();
     }
 
+    pub fn publish_str(&mut self, payload: &str) {
+        self.publish(payload.as_bytes());
+    }
+
+    pub fn publish_display(&mut self, payload: &impl core::fmt::Display) {
+        use core::fmt::Write;
+
+        self.publish_with(|view| {
+            view.clear();
+            write!(view, "{}", payload).unwrap();
+        });
+    }
+
     pub async fn wait_command(&mut self) {
         struct Fut<'a, 'b>(&'a mut Entity<'b>);
 
