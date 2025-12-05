@@ -1,4 +1,4 @@
-use crate::{BinaryState, Entity, EntityCommonConfig, EntityConfig, constants};
+use crate::{BinarySensorState, BinaryState, Entity, EntityCommonConfig, EntityConfig, constants};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum BinarySensorClass {
@@ -66,13 +66,28 @@ impl<'a> BinarySensor<'a> {
     }
 
     pub fn set(&mut self, state: BinaryState) {
-        self.0.publish(state.as_str().as_bytes());
+        let publish = self.0.with_data(|data| {
+            let storage = data.storage.as_binary_sensor_mut();
+            let publish = match &storage.state {
+                Some(s) => s.value != state,
+                None => true,
+            };
+            storage.state = Some(BinarySensorState {
+                value: state,
+                timestamp: embassy_time::Instant::now(),
+            });
+            publish
+        });
+        if publish {
+            self.0.queue_publish();
+        }
     }
 
     pub fn value(&self) -> Option<BinaryState> {
-        self.0
-            .with_data(|data| BinaryState::try_from(data.publish_value.as_slice()))
-            .ok()
+        self.0.with_data(|data| {
+            let storage = data.storage.as_binary_sensor_mut();
+            storage.state.as_ref().map(|s| s.value)
+        })
     }
 
     pub fn toggle(&mut self) -> BinaryState {

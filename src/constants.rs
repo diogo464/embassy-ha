@@ -200,6 +200,8 @@ pub const HA_SWITCH_STATE_OFF: &str = "OFF";
 pub const HA_BINARY_SENSOR_STATE_ON: &str = "ON";
 pub const HA_BINARY_SENSOR_STATE_OFF: &str = "OFF";
 
+pub const HA_BUTTON_PAYLOAD_PRESS: &str = "PRESS";
+
 // Number units - Energy
 pub const HA_UNIT_ENERGY_JOULE: &str = "J";
 pub const HA_UNIT_ENERGY_KILOJOULE: &str = "kJ";

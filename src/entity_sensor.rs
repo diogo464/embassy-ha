@@ -1,4 +1,6 @@
-use crate::{Entity, EntityCommonConfig, EntityConfig, TemperatureUnit, constants};
+use crate::{
+    Entity, EntityCommonConfig, EntityConfig, NumericSensorState, TemperatureUnit, constants,
+};
 
 #[derive(Debug, Default)]
 pub struct TemperatureSensorConfig {
@@ -23,8 +25,19 @@ impl<'a> TemperatureSensor<'a> {
     }
 
     pub fn publish(&mut self, temperature: f32) {
-        use core::fmt::Write;
-        self.0
-            .publish_with(|view| write!(view, "{}", temperature).unwrap());
+        let publish = self.0.with_data(|data| {
+            let storage = data.storage.as_numeric_sensor_mut();
+            let prev_state = storage.state.replace(NumericSensorState {
+                value: temperature,
+                timestamp: embassy_time::Instant::now(),
+            });
+            match prev_state {
+                Some(state) => state.value != temperature,
+                None => true,
+            }
+        });
+        if publish {
+            self.0.queue_publish();
+        }
     }
 }

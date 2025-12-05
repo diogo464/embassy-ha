@@ -36,6 +36,21 @@ impl<'a> Button<'a> {
     }
 
     pub async fn pressed(&mut self) {
-        self.0.wait_command().await;
+        loop {
+            self.0.wait_command().await;
+            let pressed = self.0.with_data(|data| {
+                let storage = data.storage.as_button_mut();
+                if !storage.consumed && storage.timestamp.is_some() {
+                    storage.consumed = true;
+                    true
+                } else {
+                    false
+                }
+            });
+
+            if pressed {
+                break;
+            }
+        }
     }
 }

@@ -181,14 +181,122 @@ impl Default for DeviceResources {
     }
 }
 
+#[derive(Debug, Default)]
+pub struct ButtonStorage {
+    pub timestamp: Option<embassy_time::Instant>,
+    pub consumed: bool,
+}
+
+#[derive(Debug)]
+pub struct SwitchCommand {
+    pub value: BinaryState,
+    pub timestamp: embassy_time::Instant,
+}
+
+#[derive(Debug)]
+pub struct SwitchState {
+    pub value: BinaryState,
+    pub timestamp: embassy_time::Instant,
+}
+
+#[derive(Debug, Default)]
+pub struct SwitchStorage {
+    pub state: Option<SwitchState>,
+    pub command: Option<SwitchCommand>,
+}
+
+#[derive(Debug)]
+pub struct BinarySensorState {
+    pub value: BinaryState,
+    pub timestamp: embassy_time::Instant,
+}
+
+#[derive(Debug, Default)]
+pub struct BinarySensorStorage {
+    pub state: Option<BinarySensorState>,
+}
+
+#[derive(Debug)]
+pub struct NumericSensorState {
+    pub value: f32,
+    pub timestamp: embassy_time::Instant,
+}
+
+#[derive(Debug, Default)]
+pub struct NumericSensorStorage {
+    pub state: Option<NumericSensorState>,
+}
+
+#[derive(Debug)]
+pub struct NumberState {
+    pub value: f32,
+    pub timestamp: embassy_time::Instant,
+}
+
+#[derive(Debug)]
+pub struct NumberCommand {
+    pub value: f32,
+    pub timestamp: embassy_time::Instant,
+}
+
+#[derive(Debug, Default)]
+pub struct NumberStorage {
+    pub state: Option<NumberState>,
+    pub command: Option<NumberCommand>,
+}
+
+#[derive(Debug)]
+pub enum EntityStorage {
+    Button(ButtonStorage),
+    Switch(SwitchStorage),
+    BinarySensor(BinarySensorStorage),
+    NumericSensor(NumericSensorStorage),
+    Number(NumberStorage),
+}
+
+impl EntityStorage {
+    pub fn as_button_mut(&mut self) -> &mut ButtonStorage {
+        match self {
+            EntityStorage::Button(storage) => storage,
+            _ => panic!("expected storage type to be button"),
+        }
+    }
+
+    pub fn as_switch_mut(&mut self) -> &mut SwitchStorage {
+        match self {
+            EntityStorage::Switch(storage) => storage,
+            _ => panic!("expected storage type to be switch"),
+        }
+    }
+
+    pub fn as_binary_sensor_mut(&mut self) -> &mut BinarySensorStorage {
+        match self {
+            EntityStorage::BinarySensor(storage) => storage,
+            _ => panic!("expected storage type to be binary_sensor"),
+        }
+    }
+
+    pub fn as_numeric_sensor_mut(&mut self) -> &mut NumericSensorStorage {
+        match self {
+            EntityStorage::NumericSensor(storage) => storage,
+            _ => panic!("expected storage type to be numeric_sensor"),
+        }
+    }
+
+    pub fn as_number_mut(&mut self) -> &mut NumberStorage {
+        match self {
+            EntityStorage::Number(storage) => storage,
+            _ => panic!("expected storage type to be number"),
+        }
+    }
+}
+
 struct EntityData {
     config: EntityConfig,
-    publish_dirty: bool,
-    publish_value: heapless::Vec<u8, 64>,
-    command_dirty: bool,
-    command_value: heapless::Vec<u8, 64>,
-    command_wait_waker: Option<Waker>,
-    command_instant: Option<embassy_time::Instant>,
+    storage: EntityStorage,
+    publish: bool,
+    command: bool,
+    command_waker: Option<Waker>,
 }
 
 pub struct Entity<'a> {
@@ -197,33 +305,9 @@ pub struct Entity<'a> {
 }
 
 impl<'a> Entity<'a> {
-    pub fn publish(&mut self, payload: &[u8]) {
-        self.publish_with(|view| view.extend_from_slice(payload).unwrap());
-    }
-
-    pub fn publish_with<F>(&mut self, f: F)
-    where
-        F: FnOnce(&mut VecView<u8>),
-    {
-        self.with_data(move |data| {
-            data.publish_value.clear();
-            f(data.publish_value.as_mut_view());
-            data.publish_dirty = true;
-        });
+    pub fn queue_publish(&mut self) {
+        self.with_data(|data| data.publish = true);
         self.waker.wake();
-    }
-
-    pub fn publish_str(&mut self, payload: &str) {
-        self.publish(payload.as_bytes());
-    }
-
-    pub fn publish_display(&mut self, payload: &impl core::fmt::Display) {
-        use core::fmt::Write;
-
-        self.publish_with(|view| {
-            view.clear();
-            write!(view, "{}", payload).unwrap();
-        });
     }
 
     pub async fn wait_command(&mut self) {
@@ -238,14 +322,14 @@ impl<'a> Entity<'a> {
             ) -> core::task::Poll<Self::Output> {
                 let this = &mut self.as_mut().0;
                 this.with_data(|data| {
-                    let dirty = data.command_dirty;
+                    let dirty = data.command;
                     if dirty {
-                        data.command_dirty = false;
-                        data.command_wait_waker = None;
+                        data.command = false;
+                        data.command_waker = None;
                         core::task::Poll::Ready(())
                     } else {
                         // TODO: avoid clone if waker would wake
-                        data.command_wait_waker = Some(cx.waker().clone());
+                        data.command_waker = Some(cx.waker().clone());
                         core::task::Poll::Pending
                     }
                 })
@@ -253,13 +337,6 @@ impl<'a> Entity<'a> {
         }
 
         Fut(self).await
-    }
-
-    pub fn with_command<F, R>(&mut self, f: F) -> R
-    where
-        F: FnOnce(&[u8]) -> R,
-    {
-        self.with_data(|data| f(data.command_value.as_slice()))
     }
 
     fn with_data<F, R>(&self, f: F) -> R
@@ -303,7 +380,7 @@ impl<'a> Device<'a> {
         }
     }
 
-    pub fn create_entity(&self, config: EntityConfig) -> Entity<'a> {
+    pub fn create_entity(&self, config: EntityConfig, storage: EntityStorage) -> Entity<'a> {
         let index = 'outer: {
             for idx in 0..self.entities.len() {
                 if self.entities[idx].borrow().is_none() {
@@ -315,12 +392,10 @@ impl<'a> Device<'a> {
 
         let data = EntityData {
             config,
-            publish_dirty: false,
-            publish_value: Default::default(),
-            command_dirty: false,
-            command_value: Default::default(),
-            command_wait_waker: None,
-            command_instant: None,
+            storage,
+            publish: false,
+            command: false,
+            command_waker: None,
         };
         self.entities[index].replace(Some(data));
 
@@ -339,7 +414,10 @@ impl<'a> Device<'a> {
         entity_config.id = id;
         config.populate(&mut entity_config);
 
-        let entity = self.create_entity(entity_config);
+        let entity = self.create_entity(
+            entity_config,
+            EntityStorage::NumericSensor(Default::default()),
+        );
         TemperatureSensor::new(entity)
     }
 
@@ -348,7 +426,7 @@ impl<'a> Device<'a> {
         entity_config.id = id;
         config.populate(&mut entity_config);
 
-        let entity = self.create_entity(entity_config);
+        let entity = self.create_entity(entity_config, EntityStorage::Button(Default::default()));
         Button::new(entity)
     }
 
@@ -357,7 +435,7 @@ impl<'a> Device<'a> {
         entity_config.id = id;
         config.populate(&mut entity_config);
 
-        let entity = self.create_entity(entity_config);
+        let entity = self.create_entity(entity_config, EntityStorage::Number(Default::default()));
         Number::new(entity)
     }
 
@@ -366,7 +444,7 @@ impl<'a> Device<'a> {
         entity_config.id = id;
         config.populate(&mut entity_config);
 
-        let entity = self.create_entity(entity_config);
+        let entity = self.create_entity(entity_config, EntityStorage::Switch(Default::default()));
         Switch::new(entity)
     }
 
@@ -379,18 +457,21 @@ impl<'a> Device<'a> {
         entity_config.id = id;
         config.populate(&mut entity_config);
 
-        let entity = self.create_entity(entity_config);
+        let entity = self.create_entity(
+            entity_config,
+            EntityStorage::BinarySensor(Default::default()),
+        );
         BinarySensor::new(entity)
     }
 
     pub async fn run<T: Transport>(&mut self, transport: &mut T) -> ! {
         loop {
-            self.run_iteration(&mut *transport).await;
+            self.run_iteration(transport).await;
             Timer::after_millis(5000).await;
         }
     }
 
-    async fn run_iteration<T: Transport>(&mut self, transport: T) {
+    async fn run_iteration<T: Transport>(&mut self, transport: &mut T) {
         let mut client = embedded_mqtt::Client::new(self.mqtt_resources, transport);
         client.connect(self.config.device_id).await.unwrap();
 
@@ -491,7 +572,7 @@ impl<'a> Device<'a> {
             client.subscribe(&self.command_topic_buffer).await.unwrap();
         }
 
-        loop {
+        'outer_loop: loop {
             use core::fmt::Write;
 
             for entity in self.entities {
@@ -502,11 +583,37 @@ impl<'a> Device<'a> {
                         None => break,
                     };
 
-                    if !entity.publish_dirty {
+                    if !entity.publish {
                         continue;
                     }
 
-                    entity.publish_dirty = false;
+                    entity.publish = false;
+                    self.publish_buffer.clear();
+
+                    match &entity.storage {
+                        EntityStorage::Switch(SwitchStorage {
+                            state: Some(SwitchState { value, .. }),
+                            ..
+                        }) => self
+                            .publish_buffer
+                            .extend_from_slice(value.as_str().as_bytes())
+                            .unwrap(),
+                        EntityStorage::BinarySensor(BinarySensorStorage {
+                            state: Some(BinarySensorState { value, .. }),
+                        }) => self
+                            .publish_buffer
+                            .extend_from_slice(value.as_str().as_bytes())
+                            .unwrap(),
+                        EntityStorage::NumericSensor(NumericSensorStorage {
+                            state: Some(NumericSensorState { value, .. }),
+                            ..
+                        }) => write!(self.publish_buffer, "{}", value).unwrap(),
+                        EntityStorage::Number(NumberStorage {
+                            state: Some(NumberState { value, .. }),
+                            ..
+                        }) => write!(self.publish_buffer, "{}", value).unwrap(),
+                        _ => continue, // TODO: print warning
+                    }
 
                     self.state_topic_buffer.clear();
                     write!(
@@ -518,11 +625,6 @@ impl<'a> Device<'a> {
                         }
                     )
                     .unwrap();
-
-                    self.publish_buffer.clear();
-                    self.publish_buffer
-                        .extend_from_slice(entity.publish_value.as_slice())
-                        .unwrap();
                 }
 
                 client
@@ -533,33 +635,78 @@ impl<'a> Device<'a> {
 
             let receive = client.receive();
             let waker = wait_on_atomic_waker(self.waker);
-            match embassy_futures::select::select(receive, waker).await {
-                embassy_futures::select::Either::First(packet) => {
-                    let packet = packet.unwrap();
-                    let mut read_buffer = [0u8; 128];
-                    if let embedded_mqtt::Packet::Publish(publish) = packet {
-                        if publish.data_len > 128 {
-                            defmt::warn!("mqtt publish payload too large, ignoring message");
-                        } else {
-                            let b = &mut read_buffer[..publish.data_len];
-                            client.receive_data(b).await.unwrap();
-                            defmt::info!("receive value {}", str::from_utf8(b).unwrap());
-                            for entity in self.entities {
-                                let mut entity = entity.borrow_mut();
-                                if let Some(entity) = entity.as_mut() {
-                                    entity.command_dirty = true;
-                                    entity.command_value.clear();
-                                    entity.command_value.extend_from_slice(b).unwrap();
-                                    entity.command_instant = Some(embassy_time::Instant::now());
-                                    if let Some(ref waker) = entity.command_wait_waker {
-                                        waker.wake_by_ref();
-                                    }
-                                }
-                            }
+            let publish = match embassy_futures::select::select(receive, waker).await {
+                embassy_futures::select::Either::First(packet) => match packet.unwrap() {
+                    embedded_mqtt::Packet::Publish(publish) => publish,
+                    _ => continue,
+                },
+                embassy_futures::select::Either::Second(_) => continue,
+            };
+
+            let entity = 'entity_search_block: {
+                for entity in self.entities {
+                    let mut data = entity.borrow_mut();
+                    let data = match data.as_mut() {
+                        Some(data) => data,
+                        None => break,
+                    };
+
+                    self.command_topic_buffer.clear();
+                    write!(
+                        self.command_topic_buffer,
+                        "{}",
+                        CommandTopicDisplay {
+                            device_id: self.config.device_id,
+                            entity_id: data.config.id
                         }
+                    )
+                    .unwrap();
+
+                    if self.command_topic_buffer.as_bytes() == publish.topic.as_bytes() {
+                        break 'entity_search_block entity;
                     }
                 }
-                embassy_futures::select::Either::Second(_) => {}
+                continue 'outer_loop;
+            };
+
+            let mut read_buffer = [0u8; 128];
+            if publish.data_len > read_buffer.len() {
+                defmt::warn!("mqtt publish payload too large, ignoring message");
+                continue;
+            }
+            let b = &mut read_buffer[..publish.data_len];
+            client.receive_data(b).await.unwrap();
+            let command = str::from_utf8(b).unwrap();
+
+            let mut entity = entity.borrow_mut();
+            let data = entity.as_mut().unwrap();
+
+            match &mut data.storage {
+                EntityStorage::Button(button_storage) => {
+                    assert_eq!(command, constants::HA_BUTTON_PAYLOAD_PRESS);
+                    button_storage.consumed = false;
+                    button_storage.timestamp = Some(embassy_time::Instant::now());
+                }
+                EntityStorage::Switch(switch_storage) => {
+                    let command = command.parse::<BinaryState>().unwrap();
+                    switch_storage.command = Some(SwitchCommand {
+                        value: command,
+                        timestamp: embassy_time::Instant::now(),
+                    });
+                }
+                EntityStorage::Number(number_storage) => {
+                    let command = command.parse::<f32>().unwrap();
+                    number_storage.command = Some(NumberCommand {
+                        value: command,
+                        timestamp: embassy_time::Instant::now(),
+                    });
+                }
+                _ => continue 'outer_loop,
+            }
+
+            data.command = true;
+            if let Some(waker) = data.command_waker.take() {
+                waker.wake();
             }
         }
     }

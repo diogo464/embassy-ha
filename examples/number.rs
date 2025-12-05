@@ -45,8 +45,8 @@ async fn main_task(spawner: Spawner) {
 #[embassy_executor::task]
 async fn number_task(mut number: embassy_ha::Number<'static>) {
     loop {
-        let value = number.value_wait().await;
-        number.value_set(value);
+        let value = number.wait().await;
+        number.set(value);
         Timer::after_secs(1).await;
     }
 }

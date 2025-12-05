@@ -1,4 +1,6 @@
-use crate::{Entity, EntityCommonConfig, EntityConfig, NumberUnit, constants};
+use crate::{
+    Entity, EntityCommonConfig, EntityConfig, NumberCommand, NumberState, NumberUnit, constants,
+};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum NumberMode {
@@ -167,27 +169,37 @@ impl<'a> Number<'a> {
         Self(entity)
     }
 
-    pub fn value(&mut self) -> Option<f32> {
+    pub fn get(&mut self) -> Option<f32> {
         self.0.with_data(|data| {
-            str::from_utf8(&data.command_value)
-                .ok()
-                .and_then(|v| v.parse::<f32>().ok())
+            let storage = data.storage.as_number_mut();
+            storage.state.as_ref().map(|s| s.value)
         })
     }
 
-    pub async fn value_wait(&mut self) -> f32 {
+    pub async fn wait(&mut self) -> f32 {
         loop {
             self.0.wait_command().await;
-            match self.value() {
+            match self.get() {
                 Some(value) => return value,
                 None => continue,
             }
         }
     }
 
-    pub fn value_set(&mut self, value: f32) {
-        use core::fmt::Write;
-        self.0
-            .publish_with(|view| write!(view, "{}", value).unwrap());
+    pub fn set(&mut self, value: f32) {
+        let publish = self.0.with_data(|data| {
+            let storage = data.storage.as_number_mut();
+            let timestamp = embassy_time::Instant::now();
+            let publish = match &storage.command {
+                Some(command) => command.value != value,
+                None => true,
+            };
+            storage.state = Some(NumberState { value, timestamp });
+            storage.command = Some(NumberCommand { value, timestamp });
+            publish
+        });
+        if publish {
+            self.0.queue_publish();
+        }
     }
 }

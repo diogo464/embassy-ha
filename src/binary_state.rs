@@ -2,7 +2,16 @@ use core::str::FromStr;
 
 use crate::constants;
 
+#[derive(Debug)]
 pub struct InvalidBinaryState;
+
+impl core::fmt::Display for InvalidBinaryState {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("invalid binary state, allowed values are 'ON' and 'OFF' (case insensitive)")
+    }
+}
+
+impl core::error::Error for InvalidBinaryState {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinaryState {
