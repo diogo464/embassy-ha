@@ -1,6 +1,6 @@
 #![no_std]
 
-use core::{cell::RefCell, str::FromStr, task::Waker};
+use core::{cell::RefCell, task::Waker};
 
 use defmt::Format;
 use embassy_sync::waitqueue::AtomicWaker;
@@ -12,10 +12,35 @@ use heapless::{
 use serde::Serialize;
 
 pub mod constants;
-mod transport;
-mod unit;
 
+mod binary_state;
+pub use binary_state::*;
+
+mod entity;
+pub use entity::*;
+
+mod entity_binary_sensor;
+pub use entity_binary_sensor::*;
+
+mod entity_button;
+pub use entity_button::*;
+
+mod entity_category;
+pub use entity_category::*;
+
+mod entity_number;
+pub use entity_number::*;
+
+mod entity_sensor;
+pub use entity_sensor::*;
+
+mod entity_switch;
+pub use entity_switch::*;
+
+mod transport;
 pub use transport::Transport;
+
+mod unit;
 pub use unit::*;
 
 #[derive(Debug, Format, Clone, Copy, Serialize)]
@@ -31,7 +56,8 @@ struct EntityDiscovery<'a> {
     #[serde(rename = "unique_id")]
     id: &'a str,
 
-    name: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    name: Option<&'a str>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     device_class: Option<&'a str>,
@@ -53,6 +79,9 @@ struct EntityDiscovery<'a> {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     icon: Option<&'a str>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    entity_picture: Option<&'a str>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     min: Option<f32>,
@@ -152,223 +181,6 @@ impl Default for DeviceResources {
     }
 }
 
-pub struct TemperatureSensor<'a>(Entity<'a>);
-
-impl<'a> TemperatureSensor<'a> {
-    pub fn publish(&mut self, temperature: f32) {
-        use core::fmt::Write;
-        self.0
-            .publish_with(|view| write!(view, "{}", temperature).unwrap());
-    }
-}
-
-pub struct Button<'a>(Entity<'a>);
-
-impl<'a> Button<'a> {
-    pub async fn pressed(&mut self) {
-        self.0.wait_command().await;
-    }
-}
-
-pub struct Number<'a>(Entity<'a>);
-
-impl<'a> Number<'a> {
-    pub fn value(&mut self) -> Option<f32> {
-        self.0.with_data(|data| {
-            str::from_utf8(&data.command_value)
-                .ok()
-                .and_then(|v| v.parse::<f32>().ok())
-        })
-    }
-
-    pub async fn value_wait(&mut self) -> f32 {
-        loop {
-            self.0.wait_command().await;
-            match self.value() {
-                Some(value) => return value,
-                None => continue,
-            }
-        }
-    }
-
-    pub fn value_set(&mut self, value: f32) {
-        use core::fmt::Write;
-        self.0
-            .publish_with(|view| write!(view, "{}", value).unwrap());
-    }
-}
-
-pub struct InvalidSwitchState;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SwitchState {
-    On,
-    Off,
-}
-
-impl SwitchState {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::On => constants::HA_SWITCH_STATE_ON,
-            Self::Off => constants::HA_SWITCH_STATE_OFF,
-        }
-    }
-
-    pub fn flip(self) -> Self {
-        match self {
-            Self::On => Self::Off,
-            Self::Off => Self::On,
-        }
-    }
-}
-
-impl core::fmt::Display for SwitchState {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-impl FromStr for SwitchState {
-    type Err = InvalidSwitchState;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.eq_ignore_ascii_case(constants::HA_SWITCH_STATE_ON) {
-            return Ok(Self::On);
-        }
-        if s.eq_ignore_ascii_case(constants::HA_SWITCH_STATE_OFF) {
-            return Ok(Self::Off);
-        }
-        Err(InvalidSwitchState)
-    }
-}
-
-impl TryFrom<&[u8]> for SwitchState {
-    type Error = InvalidSwitchState;
-
-    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        let string = str::from_utf8(value).map_err(|_| InvalidSwitchState)?;
-        string.parse()
-    }
-}
-
-pub struct Switch<'a>(Entity<'a>);
-
-impl<'a> Switch<'a> {
-    pub fn state(&self) -> Option<SwitchState> {
-        self.0
-            .with_data(|data| SwitchState::try_from(data.command_value.as_slice()).ok())
-    }
-
-    pub fn toggle(&mut self) -> SwitchState {
-        let new_state = self.state().unwrap_or(SwitchState::Off).flip();
-        self.set(new_state);
-        new_state
-    }
-
-    pub fn set(&mut self, state: SwitchState) {
-        self.0.publish(state.as_str().as_bytes());
-    }
-
-    pub async fn wait(&mut self) -> SwitchState {
-        loop {
-            self.0.wait_command().await;
-            if let Some(state) = self.state() {
-                return state;
-            }
-        }
-    }
-}
-
-pub struct InvalidBinarySensorState;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BinarySensorState {
-    On,
-    Off,
-}
-
-impl BinarySensorState {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::On => constants::HA_BINARY_SENSOR_STATE_ON,
-            Self::Off => constants::HA_BINARY_SENSOR_STATE_OFF,
-        }
-    }
-
-    pub fn flip(self) -> Self {
-        match self {
-            Self::On => Self::Off,
-            Self::Off => Self::On,
-        }
-    }
-}
-
-impl core::fmt::Display for BinarySensorState {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-impl FromStr for BinarySensorState {
-    type Err = InvalidBinarySensorState;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.eq_ignore_ascii_case(constants::HA_BINARY_SENSOR_STATE_ON) {
-            return Ok(Self::On);
-        }
-        if s.eq_ignore_ascii_case(constants::HA_BINARY_SENSOR_STATE_OFF) {
-            return Ok(Self::Off);
-        }
-        Err(InvalidBinarySensorState)
-    }
-}
-
-impl TryFrom<&[u8]> for BinarySensorState {
-    type Error = InvalidBinarySensorState;
-
-    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        let string = str::from_utf8(value).map_err(|_| InvalidBinarySensorState)?;
-        string.parse()
-    }
-}
-
-pub struct BinarySensor<'a>(Entity<'a>);
-
-impl<'a> BinarySensor<'a> {
-    pub fn set(&mut self, state: BinarySensorState) {
-        self.0.publish(state.as_str().as_bytes());
-    }
-
-    pub fn value(&self) -> Option<BinarySensorState> {
-        self.0
-            .with_data(|data| BinarySensorState::try_from(data.publish_value.as_slice()))
-            .ok()
-    }
-
-    pub fn toggle(&mut self) -> BinarySensorState {
-        let new_state = self.value().unwrap_or(BinarySensorState::Off).flip();
-        self.set(new_state);
-        new_state
-    }
-}
-
-#[derive(Default)]
-pub struct EntityConfig {
-    pub id: &'static str,
-    pub name: &'static str,
-    pub domain: &'static str,
-    pub device_class: Option<&'static str>,
-    pub measurement_unit: Option<&'static str>,
-    pub icon: Option<&'static str>,
-    pub category: Option<&'static str>,
-    pub state_class: Option<&'static str>,
-    pub schema: Option<&'static str>,
-    pub min: Option<f32>,
-    pub max: Option<f32>,
-    pub step: Option<f32>,
-    pub mode: Option<&'static str>,
-}
-
 struct EntityData {
     config: EntityConfig,
     publish_dirty: bool,
@@ -380,8 +192,8 @@ struct EntityData {
 }
 
 pub struct Entity<'a> {
-    data: &'a RefCell<Option<EntityData>>,
-    waker: &'a AtomicWaker,
+    pub(crate) data: &'a RefCell<Option<EntityData>>,
+    pub(crate) waker: &'a AtomicWaker,
 }
 
 impl<'a> Entity<'a> {
@@ -521,69 +333,54 @@ impl<'a> Device<'a> {
     pub fn create_temperature_sensor(
         &self,
         id: &'static str,
-        name: &'static str,
-        unit: TemperatureUnit,
+        config: TemperatureSensorConfig,
     ) -> TemperatureSensor<'a> {
-        let entity = self.create_entity(EntityConfig {
-            id,
-            name,
-            domain: constants::HA_DOMAIN_SENSOR,
-            device_class: Some(constants::HA_DEVICE_CLASS_SENSOR_TEMPERATURE),
-            measurement_unit: Some(unit.as_str()),
-            ..Default::default()
-        });
-        TemperatureSensor(entity)
+        let mut entity_config = EntityConfig::default();
+        entity_config.id = id;
+        config.populate(&mut entity_config);
+
+        let entity = self.create_entity(entity_config);
+        TemperatureSensor::new(entity)
     }
 
-    pub fn create_button(&self, id: &'static str, name: &'static str) -> Button<'a> {
-        let entity = self.create_entity(EntityConfig {
-            id,
-            name,
-            domain: constants::HA_DOMAIN_BUTTON,
-            ..Default::default()
-        });
-        Button(entity)
+    pub fn create_button(&self, id: &'static str, config: ButtonConfig) -> Button<'a> {
+        let mut entity_config = EntityConfig::default();
+        entity_config.id = id;
+        config.populate(&mut entity_config);
+
+        let entity = self.create_entity(entity_config);
+        Button::new(entity)
     }
 
-    pub fn create_number(&self, id: &'static str, name: &'static str) -> Number<'a> {
-        let entity = self.create_entity(EntityConfig {
-            id,
-            name,
-            domain: constants::HA_DOMAIN_NUMBER,
-            measurement_unit: Some("s"),
-            min: Some(0.0),
-            max: Some(200.0),
-            step: Some(2.0),
-            mode: Some(constants::HA_NUMBER_MODE_AUTO),
-            ..Default::default()
-        });
-        Number(entity)
+    pub fn create_number(&self, id: &'static str, config: NumberConfig) -> Number<'a> {
+        let mut entity_config = EntityConfig::default();
+        entity_config.id = id;
+        config.populate(&mut entity_config);
+
+        let entity = self.create_entity(entity_config);
+        Number::new(entity)
     }
 
-    pub fn create_switch(&self, id: &'static str, name: &'static str) -> Switch<'a> {
-        let entity = self.create_entity(EntityConfig {
-            id,
-            name,
-            domain: constants::HA_DOMAIN_SWITCH,
-            ..Default::default()
-        });
-        Switch(entity)
+    pub fn create_switch(&self, id: &'static str, config: SwitchConfig) -> Switch<'a> {
+        let mut entity_config = EntityConfig::default();
+        entity_config.id = id;
+        config.populate(&mut entity_config);
+
+        let entity = self.create_entity(entity_config);
+        Switch::new(entity)
     }
 
     pub fn create_binary_sensor(
         &self,
         id: &'static str,
-        name: &'static str,
-        class: &'static str,
+        config: BinarySensorConfig,
     ) -> BinarySensor<'a> {
-        let entity = self.create_entity(EntityConfig {
-            id,
-            name,
-            domain: constants::HA_DOMAIN_BINARY_SENSOR,
-            device_class: Some(class),
-            ..Default::default()
-        });
-        BinarySensor(entity)
+        let mut entity_config = EntityConfig::default();
+        entity_config.id = id;
+        config.populate(&mut entity_config);
+
+        let entity = self.create_entity(entity_config);
+        BinarySensor::new(entity)
     }
 
     pub async fn run<T: Transport>(&mut self, transport: &mut T) -> ! {
@@ -667,6 +464,7 @@ impl<'a> Device<'a> {
                     schema: entity_config.schema,
                     state_class: entity_config.state_class,
                     icon: entity_config.icon,
+                    entity_picture: entity_config.picture,
                     min: entity_config.min,
                     max: entity_config.max,
                     step: entity_config.step,

@@ -21,7 +21,16 @@ async fn main_task(spawner: Spawner) {
         },
     );
 
-    let switch = device.create_switch("switch-id", "Example Switch");
+    let switch = device.create_switch(
+        "switch-id",
+        embassy_ha::SwitchConfig {
+            common: embassy_ha::EntityCommonConfig {
+                name: Some("Example Switch"),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    );
 
     spawner.must_spawn(switch_task(switch));
 

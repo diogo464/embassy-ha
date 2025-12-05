@@ -23,8 +23,13 @@ async fn main_task(spawner: Spawner) {
 
     let sensor = device.create_binary_sensor(
         "binary-sensor-id",
-        "Binary Sensor",
-        embassy_ha::constants::HA_DEVICE_CLASS_BINARY_SENSOR_SMOKE,
+        embassy_ha::BinarySensorConfig {
+            common: embassy_ha::EntityCommonConfig {
+                name: Some("Binary Sensor"),
+                ..Default::default()
+            },
+            class: embassy_ha::BinarySensorClass::Smoke,
+        },
     );
 
     spawner.must_spawn(binary_sensor_class(sensor));

@@ -23,14 +23,24 @@ async fn main_task(spawner: Spawner) {
 
     let constant_temperature_sensor = device.create_temperature_sensor(
         "constant-temperature-sensor-id",
-        "Constant Temperature Sensor",
-        embassy_ha::TemperatureUnit::Celcius,
+        embassy_ha::TemperatureSensorConfig {
+            common: embassy_ha::EntityCommonConfig {
+                name: Some("Constant Temperature Sensor"),
+                ..Default::default()
+            },
+            unit: embassy_ha::TemperatureUnit::Celcius,
+        },
     );
 
     let random_temperature_sensor = device.create_temperature_sensor(
         "random-temperature-sensor-id",
-        "Random Temperature Sensor",
-        embassy_ha::TemperatureUnit::Celcius,
+        embassy_ha::TemperatureSensorConfig {
+            common: embassy_ha::EntityCommonConfig {
+                name: Some("Random Temperature Sensor"),
+                ..Default::default()
+            },
+            unit: embassy_ha::TemperatureUnit::Celcius,
+        },
     );
 
     spawner.must_spawn(constant_temperature_task(constant_temperature_sensor));

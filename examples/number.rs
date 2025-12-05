@@ -21,7 +21,21 @@ async fn main_task(spawner: Spawner) {
         },
     );
 
-    let number = device.create_number("number-id", "Number Name");
+    let number = device.create_number(
+        "number-id",
+        embassy_ha::NumberConfig {
+            common: embassy_ha::EntityCommonConfig {
+                name: Some("Number Name"),
+                ..Default::default()
+            },
+            unit: Some(embassy_ha::NumberUnit::Meter),
+            min: Some(0.0),
+            max: Some(20.0),
+            step: Some(0.5),
+            mode: embassy_ha::NumberMode::Slider,
+            class: embassy_ha::NumberClass::Distance,
+        },
+    );
 
     spawner.must_spawn(number_task(number));
 
