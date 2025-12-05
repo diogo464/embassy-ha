@@ -1,4 +1,4 @@
-use crate::{BinaryState, Entity, EntityCommonConfig, EntityConfig, SwitchState, constants};
+use crate::{BinaryState, Entity, EntityCommonConfig, EntityConfig, SwitchCommand, SwitchState, constants};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum SwitchClass {
@@ -65,13 +65,26 @@ impl<'a> Switch<'a> {
     }
 
     pub fn set(&mut self, state: BinaryState) {
-        self.0.with_data(|data| {
+        let publish = self.0.with_data(|data| {
             let storage = data.storage.as_switch_mut();
+            let timestamp = embassy_time::Instant::now();
+            let publish = match &storage.command {
+                Some(command) => command.value != state,
+                None => true,
+            };
             storage.state = Some(SwitchState {
                 value: state,
-                timestamp: embassy_time::Instant::now(),
+                timestamp,
             });
-        })
+            storage.command = Some(SwitchCommand {
+                value: state,
+                timestamp,
+            });
+            publish
+        });
+        if publish {
+            self.0.queue_publish();
+        }
     }
 
     pub async fn wait(&mut self) -> BinaryState {
