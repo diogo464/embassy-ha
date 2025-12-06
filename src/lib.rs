@@ -997,6 +997,8 @@ pub async fn connect_and_run(
             continue;
         }
 
+        socket.set_timeout(None);
+
         if let Err(err) = device.run(&mut socket).await {
             crate::log::error!(
                 "Device run failed with: {:?}",
