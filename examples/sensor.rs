@@ -11,7 +11,7 @@ static RESOURCES: StaticCell<embassy_ha::DeviceResources> = StaticCell::new();
 async fn main_task(spawner: Spawner) {
     let mut stream = AsyncTcp::connect(std::env!("MQTT_ADDRESS"));
 
-    let mut device = embassy_ha::Device::new(
+    let mut device = embassy_ha::new(
         RESOURCES.init(Default::default()),
         embassy_ha::DeviceConfig {
             device_id: "example-device-id",
@@ -21,7 +21,8 @@ async fn main_task(spawner: Spawner) {
         },
     );
 
-    let temperature_sensor = device.create_sensor(
+    let temperature_sensor = embassy_ha::create_sensor(
+        &device,
         "random-temperature-sensor-id",
         embassy_ha::SensorConfig {
             common: embassy_ha::EntityCommonConfig {
@@ -35,7 +36,8 @@ async fn main_task(spawner: Spawner) {
         },
     );
 
-    let humidity_sensor = device.create_sensor(
+    let humidity_sensor = embassy_ha::create_sensor(
+        &device,
         "random-humidity-sensor-id",
         embassy_ha::SensorConfig {
             common: embassy_ha::EntityCommonConfig {
@@ -52,7 +54,7 @@ async fn main_task(spawner: Spawner) {
     spawner.must_spawn(random_temperature_task(temperature_sensor));
     spawner.must_spawn(random_humidity_task(humidity_sensor));
 
-    device.run(&mut stream).await.unwrap();
+    embassy_ha::run(&mut device, &mut stream).await.unwrap();
 }
 
 #[embassy_executor::task]

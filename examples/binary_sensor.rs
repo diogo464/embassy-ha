@@ -11,7 +11,7 @@ static RESOURCES: StaticCell<embassy_ha::DeviceResources> = StaticCell::new();
 async fn main_task(spawner: Spawner) {
     let mut stream = AsyncTcp::connect(std::env!("MQTT_ADDRESS"));
 
-    let mut device = embassy_ha::Device::new(
+    let mut device = embassy_ha::new(
         RESOURCES.init(Default::default()),
         embassy_ha::DeviceConfig {
             device_id: "example-device-id",
@@ -21,7 +21,8 @@ async fn main_task(spawner: Spawner) {
         },
     );
 
-    let sensor = device.create_binary_sensor(
+    let sensor = embassy_ha::create_binary_sensor(
+        &device,
         "binary-sensor-id",
         embassy_ha::BinarySensorConfig {
             common: embassy_ha::EntityCommonConfig {
@@ -34,7 +35,7 @@ async fn main_task(spawner: Spawner) {
 
     spawner.must_spawn(binary_sensor_class(sensor));
 
-    device.run(&mut stream).await.unwrap();
+    embassy_ha::run(&mut device, &mut stream).await.unwrap();
 }
 
 #[embassy_executor::task]
