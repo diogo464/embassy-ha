@@ -16,7 +16,6 @@ defmt = ["dep:defmt", "embassy-net/defmt", "embassy-sync/defmt"]
 tracing = ["dep:tracing"]
 
 [dependencies]
-embedded-mqtt = { version = "0.1", path = "./embedded-mqtt" }
 embassy-net = { version = "0.7", features = ["medium-ip", "proto-ipv4", "tcp", "dns"] }
 heapless = "0.9"
 embassy-time = { version = "0.5" }

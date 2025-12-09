@@ -1,6 +1,6 @@
 use core::{mem::MaybeUninit, ops::Deref};
 
-use crate::varint;
+use super::varint;
 
 const DEFAULT_FIELD_BUFFER_CAP: usize = 32;
 

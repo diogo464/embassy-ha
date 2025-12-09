@@ -1,4 +1,4 @@
-use crate::{field::Field, varint};
+use super::{field::Field, varint};
 
 pub trait Transport: embedded_io_async::Read + embedded_io_async::Write {}
 

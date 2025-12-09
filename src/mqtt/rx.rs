@@ -1,4 +1,4 @@
-use crate::{ConnectCode, PacketId, Qos, protocol, varint};
+use super::{ConnectCode, PacketId, Qos, protocol, varint};
 
 #[derive(Debug)]
 pub enum Error {

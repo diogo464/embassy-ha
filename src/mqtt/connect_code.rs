@@ -1,4 +1,4 @@
-use crate::protocol;
+use super::protocol;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConnectCode {

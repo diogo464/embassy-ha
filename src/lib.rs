@@ -28,6 +28,8 @@ use heapless::{
 };
 use serde::Serialize;
 
+mod mqtt;
+
 pub mod log;
 pub use log::Format;
 
@@ -215,7 +217,7 @@ pub struct DeviceResources {
     waker: AtomicWaker,
     entities: [RefCell<Option<EntityData>>; Self::ENTITY_LIMIT],
 
-    mqtt_resources: embedded_mqtt::ClientResources,
+    mqtt_resources: mqtt::ClientResources,
     publish_buffer: Vec<u8, 2048>,
     subscribe_buffer: Vec<u8, 128>,
     discovery_buffer: Vec<u8, 2048>,
@@ -422,7 +424,7 @@ pub struct Device<'a> {
     waker: &'a AtomicWaker,
     entities: &'a [RefCell<Option<EntityData>>],
 
-    mqtt_resources: &'a mut embedded_mqtt::ClientResources,
+    mqtt_resources: &'a mut mqtt::ClientResources,
     publish_buffer: &'a mut VecView<u8>,
     subscribe_buffer: &'a mut VecView<u8>,
     discovery_buffer: &'a mut VecView<u8>,
@@ -585,8 +587,8 @@ pub async fn run<T: Transport>(device: &mut Device<'_>, transport: &mut T) -> Re
     .expect("device availability buffer too small");
     let availability_topic = device.availability_topic_buffer.as_str();
 
-    let mut client = embedded_mqtt::Client::new(device.mqtt_resources, transport);
-    let connect_params = embedded_mqtt::ConnectParams {
+    let mut client = mqtt::Client::new(device.mqtt_resources, transport);
+    let connect_params = mqtt::ConnectParams {
         will_topic: Some(availability_topic),
         will_payload: Some(NOT_AVAILABLE_PAYLOAD.as_bytes()),
         will_retain: true,
@@ -744,7 +746,7 @@ pub async fn run<T: Transport>(device: &mut Device<'_>, transport: &mut T) -> Re
         client.publish_with(
             availability_topic,
             AVAILABLE_PAYLOAD.as_bytes(),
-            embedded_mqtt::PublishParams {
+            mqtt::PublishParams {
                 retain: true,
                 ..Default::default()
             },
@@ -858,7 +860,7 @@ pub async fn run<T: Transport>(device: &mut Device<'_>, transport: &mut T) -> Re
         .await
         {
             Ok(embassy_futures::select::Either::First(packet)) => match packet {
-                Ok(embedded_mqtt::Packet::Publish(publish)) => publish,
+                Ok(mqtt::Packet::Publish(publish)) => publish,
                 Err(err) => {
                     crate::log::error!(
                         "mqtt receive failed with: {:?}",

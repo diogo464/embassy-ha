@@ -1,9 +1,3 @@
-//! mqtt client library for embedded devices.
-//!
-
-
-#![no_std]
-
 mod connect_code;
 mod field;
 mod packet_id;
@@ -20,7 +14,7 @@ pub use packet_id::PacketId;
 pub use qos::Qos;
 pub use transport::Transport;
 
-use crate::{field::FieldBuffer, transport::TransportExt as _};
+use self::{field::FieldBuffer, transport::TransportExt as _};
 
 const DEFAULT_CLIENT_RX_BUFFER_SIZE: usize = 512;
 const DEFAULT_CLIENT_TX_BUFFER_SIZE: usize = 512;
