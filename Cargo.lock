@@ -149,7 +149,7 @@ checksum = "dc2d050bdc5c21e0862a89256ed8029ae6c290a93aecefc73084b3002cdebb01"
 
 [[package]]
 name = "embassy-ha"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "critical-section",
  "defmt 1.0.1",
