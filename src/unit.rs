@@ -73,6 +73,19 @@ impl PressureUnit {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SignalStrengthUnit {
+    Dbm,
+}
+
+impl SignalStrengthUnit {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SignalStrengthUnit::Dbm => crate::constants::HA_UNIT_SIGNAL_STRENGTH_DBM,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EnergyUnit {
     KiloWattHour,
 }
@@ -442,6 +455,7 @@ pub enum Unit {
     LightLux,
     PressureHectoPascal,
     EnergyKiloWattHour,
+    SignalStrengthDbm,
     TimeMilliseconds,
     TimeSeconds,
     TimeMinutes,
@@ -571,6 +585,7 @@ impl Unit {
             Unit::LightLux => crate::constants::HA_UNIT_LIGHT_LUX,
             Unit::PressureHectoPascal => crate::constants::HA_UNIT_PRESSURE_HPA,
             Unit::EnergyKiloWattHour => crate::constants::HA_UNIT_ENERGY_KWH,
+            Unit::SignalStrengthDbm => crate::constants::HA_UNIT_SIGNAL_STRENGTH_DBM,
             Unit::TimeMilliseconds => crate::constants::HA_UNIT_TIME_MILLISECONDS,
             Unit::TimeSeconds => crate::constants::HA_UNIT_TIME_SECONDS,
             Unit::TimeMinutes => crate::constants::HA_UNIT_TIME_MINUTES,
@@ -746,6 +761,14 @@ impl From<PressureUnit> for Unit {
     fn from(unit: PressureUnit) -> Self {
         match unit {
             PressureUnit::HectoPascal => Unit::PressureHectoPascal,
+        }
+    }
+}
+
+impl From<SignalStrengthUnit> for Unit {
+    fn from(unit: SignalStrengthUnit) -> Self {
+        match unit {
+            SignalStrengthUnit::Dbm => Unit::SignalStrengthDbm,
         }
     }
 }
@@ -981,6 +1004,17 @@ impl TryFrom<Unit> for PressureUnit {
     fn try_from(unit: Unit) -> Result<Self, Self::Error> {
         match unit {
             Unit::PressureHectoPascal => Ok(PressureUnit::HectoPascal),
+            _ => Err(UnitConversionError),
+        }
+    }
+}
+
+impl TryFrom<Unit> for SignalStrengthUnit {
+    type Error = UnitConversionError;
+
+    fn try_from(unit: Unit) -> Result<Self, Self::Error> {
+        match unit {
+            Unit::SignalStrengthDbm => Ok(SignalStrengthUnit::Dbm),
             _ => Err(UnitConversionError),
         }
     }

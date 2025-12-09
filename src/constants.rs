@@ -302,3 +302,6 @@ pub const HA_UNIT_WEIGHT_STONE: &str = "st";
 
 // Light
 pub const HA_UNIT_LIGHT_LUX: &str = "lx";
+
+// Signal Strength
+pub const HA_UNIT_SIGNAL_STRENGTH_DBM: &str = "dBm";
