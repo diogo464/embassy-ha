@@ -29,6 +29,7 @@ pub(crate) struct EntityConfig {
     pub category: Option<&'static str>,
     pub state_class: Option<&'static str>,
     pub schema: Option<&'static str>,
+    pub platform: Option<&'static str>,
     pub min: Option<f32>,
     pub max: Option<f32>,
     pub step: Option<f32>,

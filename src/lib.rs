@@ -52,6 +52,9 @@ pub use entity_button::*;
 mod entity_category;
 pub use entity_category::*;
 
+mod entity_device_tracker;
+pub use entity_device_tracker::*;
+
 mod entity_number;
 pub use entity_number::*;
 
@@ -115,10 +118,16 @@ struct EntityDiscovery<'a> {
     command_topic: Option<&'a str>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
+    json_attributes_topic: Option<&'a str>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     unit_of_measurement: Option<&'a str>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     schema: Option<&'a str>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    platform: Option<&'a str>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     state_class: Option<&'a str>,
@@ -198,6 +207,21 @@ impl<'a> core::fmt::Display for CommandTopicDisplay<'a> {
     }
 }
 
+struct AttributesTopicDisplay<'a> {
+    device_id: &'a str,
+    entity_id: &'a str,
+}
+
+impl<'a> core::fmt::Display for AttributesTopicDisplay<'a> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(
+            f,
+            "embassy-ha/{}/{}/attributes",
+            self.device_id, self.entity_id
+        )
+    }
+}
+
 struct DeviceAvailabilityTopic<'a> {
     device_id: &'a str,
 }
@@ -227,6 +251,7 @@ pub struct DeviceResources {
     discovery_topic_buffer: String<128>,
     state_topic_buffer: String<128>,
     command_topic_buffer: String<128>,
+    attributes_topic_buffer: String<128>,
 }
 
 impl DeviceResources {
@@ -247,6 +272,7 @@ impl Default for DeviceResources {
             discovery_topic_buffer: Default::default(),
             state_topic_buffer: Default::default(),
             command_topic_buffer: Default::default(),
+            attributes_topic_buffer: Default::default(),
         }
     }
 }
@@ -323,6 +349,19 @@ pub(crate) struct NumberStorage {
     pub publish_on_command: bool,
 }
 
+#[derive(Debug, Serialize)]
+pub(crate) struct DeviceTrackerState {
+    pub latitude: f32,
+    pub longitude: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gps_accuracy: Option<f32>,
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct DeviceTrackerStorage {
+    pub state: Option<DeviceTrackerState>,
+}
+
 #[derive(Debug)]
 pub(crate) enum EntityStorage {
     Button(ButtonStorage),
@@ -330,6 +369,7 @@ pub(crate) enum EntityStorage {
     BinarySensor(BinarySensorStorage),
     NumericSensor(NumericSensorStorage),
     Number(NumberStorage),
+    DeviceTracker(DeviceTrackerStorage),
 }
 
 impl EntityStorage {
@@ -365,6 +405,13 @@ impl EntityStorage {
         match self {
             EntityStorage::Number(storage) => storage,
             _ => panic!("expected storage type to be number"),
+        }
+    }
+
+    pub fn as_device_tracker_mut(&mut self) -> &mut DeviceTrackerStorage {
+        match self {
+            EntityStorage::DeviceTracker(storage) => storage,
+            _ => panic!("expected storage type to be device tracker"),
         }
     }
 }
@@ -440,6 +487,7 @@ pub struct Device<'a> {
     discovery_topic_buffer: &'a mut StringView,
     state_topic_buffer: &'a mut StringView,
     command_topic_buffer: &'a mut StringView,
+    attributes_topic_buffer: &'a mut StringView,
 }
 
 pub fn new<'a>(resources: &'a mut DeviceResources, config: DeviceConfig) -> Device<'a> {
@@ -456,6 +504,7 @@ pub fn new<'a>(resources: &'a mut DeviceResources, config: DeviceConfig) -> Devi
         discovery_topic_buffer: &mut resources.discovery_topic_buffer,
         state_topic_buffer: &mut resources.state_topic_buffer,
         command_topic_buffer: &mut resources.command_topic_buffer,
+        attributes_topic_buffer: &mut resources.attributes_topic_buffer,
     }
 }
 
@@ -589,6 +638,25 @@ pub fn create_binary_sensor<'a>(
     BinarySensor::new(entity)
 }
 
+pub fn create_device_tracker<'a>(
+    device: &Device<'a>,
+    id: &'static str,
+    config: DeviceTrackerConfig,
+) -> DeviceTracker<'a> {
+    let mut entity_config = EntityConfig {
+        id,
+        ..Default::default()
+    };
+    config.populate(&mut entity_config);
+
+    let entity = create_entity(
+        device,
+        entity_config,
+        EntityStorage::DeviceTracker(Default::default()),
+    );
+    DeviceTracker::new(entity)
+}
+
 pub async fn run<T: Transport>(device: &mut Device<'_>, transport: &mut T) -> Result<(), Error> {
     use core::fmt::Write;
 
@@ -647,6 +715,7 @@ pub async fn run<T: Transport>(device: &mut Device<'_>, transport: &mut T) -> Re
         device.discovery_topic_buffer.clear();
         device.state_topic_buffer.clear();
         device.command_topic_buffer.clear();
+        device.attributes_topic_buffer.clear();
 
         // borrow the entity and fill out the buffers to be sent
         // this should be done inside a block so that we do not hold the RefMut across an
@@ -672,6 +741,10 @@ pub async fn run<T: Transport>(device: &mut Device<'_>, transport: &mut T) -> Re
                 device_id: device.config.device_id,
                 entity_id: entity_config.id,
             };
+            let attributes_topic_display = AttributesTopicDisplay {
+                device_id: device.config.device_id,
+                entity_id: entity_config.id,
+            };
 
             write!(device.discovery_topic_buffer, "{discovery_topic_display}")
                 .expect("discovery topic buffer too small");
@@ -679,6 +752,8 @@ pub async fn run<T: Transport>(device: &mut Device<'_>, transport: &mut T) -> Re
                 .expect("state topic buffer too small");
             write!(device.command_topic_buffer, "{command_topic_display}")
                 .expect("command topic buffer too small");
+            write!(device.attributes_topic_buffer, "{attributes_topic_display}")
+                .expect("attributes topic buffer too small");
 
             let discovery = EntityDiscovery {
                 id: entity_config.id,
@@ -686,8 +761,10 @@ pub async fn run<T: Transport>(device: &mut Device<'_>, transport: &mut T) -> Re
                 device_class: entity_config.device_class,
                 state_topic: Some(device.state_topic_buffer.as_str()),
                 command_topic: Some(device.command_topic_buffer.as_str()),
+                json_attributes_topic: Some(device.attributes_topic_buffer.as_str()),
                 unit_of_measurement: entity_config.measurement_unit,
                 schema: entity_config.schema,
+                platform: entity_config.platform,
                 state_class: entity_config.state_class,
                 icon: entity_config.icon,
                 entity_picture: entity_config.picture,
@@ -790,7 +867,7 @@ pub async fn run<T: Transport>(device: &mut Device<'_>, transport: &mut T) -> Re
         use core::fmt::Write;
 
         for entity in device.entities {
-            {
+            let publish_topic = {
                 let mut entity = entity.borrow_mut();
                 let entity = match entity.as_mut() {
                     Some(entity) => entity,
@@ -804,6 +881,7 @@ pub async fn run<T: Transport>(device: &mut Device<'_>, transport: &mut T) -> Re
                 entity.publish = false;
                 device.publish_buffer.clear();
 
+                let mut publish_to_attributes = false;
                 match &entity.storage {
                     EntityStorage::Switch(SwitchStorage {
                         state: Some(SwitchState { value, .. }),
@@ -828,6 +906,19 @@ pub async fn run<T: Transport>(device: &mut Device<'_>, transport: &mut T) -> Re
                         ..
                     }) => write!(device.publish_buffer, "{}", value)
                         .expect("publish buffer too small for number state payload"),
+                    EntityStorage::DeviceTracker(DeviceTrackerStorage {
+                        state: Some(tracker_state),
+                    }) => {
+                        publish_to_attributes = true;
+                        device
+                            .publish_buffer
+                            .resize(device.publish_buffer.capacity(), 0)
+                            .expect("resize to capacity should never fail");
+                        let n =
+                            serde_json_core::to_slice(&tracker_state, &mut device.publish_buffer)
+                                .expect("publish buffer too small for tracker state payload");
+                        device.publish_buffer.truncate(n);
+                    }
                     _ => {
                         crate::log::warn!(
                             "entity '{}' requested state publish but its storage does not support it",
@@ -837,19 +928,30 @@ pub async fn run<T: Transport>(device: &mut Device<'_>, transport: &mut T) -> Re
                     }
                 }
 
-                let state_topic_display = StateTopicDisplay {
-                    device_id: device.config.device_id,
-                    entity_id: entity.config.id,
-                };
-                device.state_topic_buffer.clear();
-                write!(device.state_topic_buffer, "{state_topic_display}")
-                    .expect("state topic buffer too small");
-            }
+                if publish_to_attributes {
+                    let attributes_topic_display = AttributesTopicDisplay {
+                        device_id: device.config.device_id,
+                        entity_id: entity.config.id,
+                    };
+                    device.attributes_topic_buffer.clear();
+                    write!(device.attributes_topic_buffer, "{attributes_topic_display}")
+                        .expect("attributes topic buffer too small");
+                    device.attributes_topic_buffer.as_str()
+                } else {
+                    let state_topic_display = StateTopicDisplay {
+                        device_id: device.config.device_id,
+                        entity_id: entity.config.id,
+                    };
+                    device.state_topic_buffer.clear();
+                    write!(device.state_topic_buffer, "{state_topic_display}")
+                        .expect("state topic buffer too small");
+                    device.state_topic_buffer.as_str()
+                }
+            };
 
-            let state_topic = device.state_topic_buffer.as_str();
             match embassy_time::with_timeout(
                 MQTT_TIMEOUT,
-                client.publish(state_topic, device.publish_buffer),
+                client.publish(publish_topic, device.publish_buffer),
             )
             .await
             {
@@ -857,13 +959,13 @@ pub async fn run<T: Transport>(device: &mut Device<'_>, transport: &mut T) -> Re
                 Ok(Err(err)) => {
                     crate::log::error!(
                         "mqtt state publish on topic '{}' failed with: {:?}",
-                        state_topic,
+                        publish_topic,
                         crate::log::Debug2Format(&err)
                     );
                     return Err(Error::new("mqtt publish failed"));
                 }
                 Err(_) => {
-                    crate::log::error!("mqtt state publish on topic '{}' timed out", state_topic);
+                    crate::log::error!("mqtt state publish on topic '{}' timed out", publish_topic);
                     return Err(Error::new("mqtt publish timed out"));
                 }
             }

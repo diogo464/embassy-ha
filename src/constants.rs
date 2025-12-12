@@ -7,6 +7,7 @@ pub const HA_DOMAIN_LIGHT: &str = "light";
 pub const HA_DOMAIN_BUTTON: &str = "button";
 pub const HA_DOMAIN_SELECT: &str = "select";
 pub const HA_DOMAIN_NUMBER: &str = "number";
+pub const HA_DOMAIN_DEVICE_TRACKER: &str = "device_tracker";
 
 pub const HA_NUMBER_MODE_AUTO: &str = "auto";
 pub const HA_NUMBER_MODE_BOX: &str = "box";
