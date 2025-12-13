@@ -72,6 +72,7 @@ pub use unit::*;
 
 const AVAILABLE_PAYLOAD: &str = "online";
 const NOT_AVAILABLE_PAYLOAD: &str = "offline";
+const DEFAULT_KEEPALIVE_TIME: u16 = 30;
 
 #[derive(Debug)]
 pub struct Error(&'static str);
@@ -673,11 +674,14 @@ pub async fn run<T: Transport>(device: &mut Device<'_>, transport: &mut T) -> Re
     .expect("device availability buffer too small");
     let availability_topic = device.availability_topic_buffer.as_str();
 
+    let mut ping_ticker =
+        embassy_time::Ticker::every(Duration::from_secs(u64::from(DEFAULT_KEEPALIVE_TIME)));
     let mut client = mqtt::Client::new(device.mqtt_resources, transport);
     let connect_params = mqtt::ConnectParams {
         will_topic: Some(availability_topic),
         will_payload: Some(NOT_AVAILABLE_PAYLOAD.as_bytes()),
         will_retain: true,
+        keepalive: Some(DEFAULT_KEEPALIVE_TIME),
         ..Default::default()
     };
     match embassy_time::with_timeout(
@@ -863,6 +867,7 @@ pub async fn run<T: Transport>(device: &mut Device<'_>, transport: &mut T) -> Re
         }
     }
 
+    let mut first_iteration_push = true;
     'outer_loop: loop {
         use core::fmt::Write;
 
@@ -874,7 +879,7 @@ pub async fn run<T: Transport>(device: &mut Device<'_>, transport: &mut T) -> Re
                     None => break,
                 };
 
-                if !entity.publish {
+                if !entity.publish && !first_iteration_push {
                     continue;
                 }
 
@@ -920,10 +925,12 @@ pub async fn run<T: Transport>(device: &mut Device<'_>, transport: &mut T) -> Re
                         device.publish_buffer.truncate(n);
                     }
                     _ => {
-                        crate::log::warn!(
-                            "entity '{}' requested state publish but its storage does not support it",
-                            entity.config.id
-                        );
+                        if !first_iteration_push {
+                            crate::log::warn!(
+                                "entity '{}' requested state publish but its storage does not support it",
+                                entity.config.id
+                            );
+                        }
                         continue;
                     }
                 }
@@ -970,32 +977,35 @@ pub async fn run<T: Transport>(device: &mut Device<'_>, transport: &mut T) -> Re
                 }
             }
         }
+        first_iteration_push = false;
 
         let receive = client.receive();
         let waker = wait_on_atomic_waker(device.waker);
-        let publish = match embassy_time::with_timeout(
-            MQTT_TIMEOUT,
-            embassy_futures::select::select(receive, waker),
-        )
-        .await
-        {
-            Ok(embassy_futures::select::Either::First(packet)) => match packet {
-                Ok(mqtt::Packet::Publish(publish)) => publish,
-                Err(err) => {
-                    crate::log::error!(
-                        "mqtt receive failed with: {:?}",
-                        crate::log::Debug2Format(&err)
-                    );
-                    return Err(Error::new("mqtt receive failed"));
+        let publish =
+            match embassy_futures::select::select3(receive, waker, ping_ticker.next()).await {
+                embassy_futures::select::Either3::First(packet) => match packet {
+                    Ok(mqtt::Packet::Publish(publish)) => publish,
+                    Err(err) => {
+                        crate::log::error!(
+                            "mqtt receive failed with: {:?}",
+                            crate::log::Debug2Format(&err)
+                        );
+                        return Err(Error::new("mqtt receive failed"));
+                    }
+                    _ => continue,
+                },
+                embassy_futures::select::Either3::Second(_) => continue,
+                embassy_futures::select::Either3::Third(_) => {
+                    if let Err(err) = client.ping().await {
+                        crate::log::error!(
+                            "mqtt ping failed with: {:?}",
+                            crate::log::Debug2Format(&err)
+                        );
+                        return Err(Error::new("mqtt ping failed"));
+                    }
+                    continue;
                 }
-                _ => continue,
-            },
-            Ok(embassy_futures::select::Either::Second(_)) => continue,
-            Err(_) => {
-                crate::log::error!("mqtt receive timed out");
-                return Err(Error::new("mqtt receive timed out"));
-            }
-        };
+            };
 
         let entity = 'entity_search_block: {
             for entity in device.entities {

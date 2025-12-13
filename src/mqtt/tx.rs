@@ -201,3 +201,12 @@ pub fn pubcomp(buffer: &mut FieldBuffer, packet_id: PacketId) {
     buffer.push(Field::U16(packet_id.into()));
 }
 
+pub fn pingreq(buffer: &mut FieldBuffer) {
+    // PINGREQ has no variable header or payload
+    buffer.push(Field::U8(protocol::create_header_control(
+        protocol::PACKET_TYPE_PINGREQ,
+        0,
+    )));
+    buffer.push(Field::VarInt(0));
+}
+
