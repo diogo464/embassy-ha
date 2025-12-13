@@ -16,21 +16,21 @@ defmt = ["dep:defmt", "embassy-net/defmt", "embassy-sync/defmt"]
 tracing = ["dep:tracing"]
 
 [dependencies]
-embassy-net = { version = "0.7", features = ["medium-ip", "proto-ipv4", "tcp", "dns"] }
+embassy-net = { git = "https://github.com/embassy-rs/embassy", features = ["medium-ip", "proto-ipv4", "tcp", "dns"] }
 heapless = "0.9"
-embassy-time = { version = "0.5" }
+embassy-time = { git = "https://github.com/embassy-rs/embassy" }
 serde-json-core = "0.6"
 serde = { version = "1", default-features = false, features = ["derive"] }
 defmt = { version = "1", optional = true }
 tracing = { version = "0.1", optional = true, default-features = false }
-embassy-sync = { version = "0.7" }
-embassy-futures = "0.1"
-embedded-io-async = "0.6"
+embassy-sync = { git = "https://github.com/embassy-rs/embassy" }
+embassy-futures = { git = "https://github.com/embassy-rs/embassy" }
+embedded-io-async = { version = "0.6" }
 
 [dev-dependencies]
-embassy-time = { version = "0.5", features = ["std"] }
-embassy-executor = { version = "0.9", features = ["arch-std", "executor-thread"] }
-embassy-sync = { version = "0.7" }
+embassy-time = { git = "https://github.com/embassy-rs/embassy", features = ["std"] }
+embassy-executor = { git = "https://github.com/embassy-rs/embassy", features = ["arch-std", "executor-thread"] }
+embassy-sync = { git = "https://github.com/embassy-rs/embassy" }
 static_cell = "2.1"
 embedded-io-async = { version = "0.6", features = ["std"] }
 critical-section = { version = "1", features = ["std"] }

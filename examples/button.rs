@@ -26,7 +26,7 @@ async fn main_task(spawner: Spawner) {
         embassy_ha::ButtonConfig::default(),
     );
 
-    spawner.must_spawn(button_task(button));
+    spawner.spawn(button_task(button).unwrap());
 
     embassy_ha::run(&mut device, &mut stream).await.unwrap();
 }

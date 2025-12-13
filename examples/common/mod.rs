@@ -19,7 +19,7 @@ macro_rules! example_main {
 
             let executor = common::EXECUTOR.init(Executor::new());
             executor.run(|spawner| {
-                spawner.must_spawn(main_task(spawner));
+                spawner.spawn(main_task(spawner).unwrap());
             });
         }
     };
