@@ -120,6 +120,7 @@ pub enum Packet<'a> {
     PublishAck(PublishAck),
     SubscribeAck(SubscribeAck),
     UnsubscribeAck(UnsubscribeAck),
+    PingResponse,
 }
 
 pub struct ClientResources<
@@ -199,7 +200,7 @@ where
                 will_topic: params.will_topic,
                 will_payload: params.will_payload,
                 will_retain: params.will_retain,
-                keepalive: None,
+                keepalive: params.keepalive,
             },
         );
         self.transport
@@ -220,10 +221,21 @@ where
                     Err(Error::ConnectFailed(code))
                 }
             }
-            _ => Err(Error::Protocol(
-                "expected CONNACK packet after CONNECT",
-            )),
+            _ => Err(Error::Protocol("expected CONNACK packet after CONNECT")),
         }
+    }
+
+    pub async fn ping(&mut self) -> Result<(), Error<T>> {
+        let mut buffer = FieldBuffer::default();
+        tx::pingreq(&mut buffer);
+
+        self.transport
+            .write_fields(&buffer)
+            .await
+            .map_err(Error::Transport)?;
+        self.transport.flush().await.map_err(Error::Transport)?;
+
+        Ok(())
     }
 
     pub async fn publish(&mut self, topic: &str, data: &[u8]) -> Result<PacketId, Error<T>> {
@@ -391,6 +403,7 @@ where
             rx::Packet::UnsubscribeAck { packet_id } => {
                 Ok(Packet::UnsubscribeAck(UnsubscribeAck { packet_id }))
             }
+            rx::Packet::PingResp => Ok(Packet::PingResponse),
         }
     }
 

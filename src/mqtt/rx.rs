@@ -65,6 +65,7 @@ pub enum Packet<'a> {
     UnsubscribeAck {
         packet_id: PacketId,
     },
+    PingResp,
 }
 
 pub fn decode<'a>(buf: &'a [u8]) -> Result<(Packet<'a>, usize), Error> {
@@ -156,6 +157,15 @@ pub fn decode<'a>(buf: &'a [u8]) -> Result<(Packet<'a>, usize), Error> {
             let packet_id = PacketId::from(reader.read_u16()?);
             Packet::UnsubscribeAck { packet_id }
         }
+        protocol::PACKET_TYPE_PINGRESP => {
+            if packet_flags != 0 {
+                return Err(Error::InvalidPacket("PINGRESP flags must be zero"));
+            }
+            if packet_len != 0 {
+                return Err(Error::InvalidPacket("PINGRESP remaining length must be 0"));
+            }
+            Packet::PingResp
+        }
         protocol::PACKET_TYPE_CONNECT
         | protocol::PACKET_TYPE_PUBREC
         | protocol::PACKET_TYPE_PUBREL
@@ -163,8 +173,7 @@ pub fn decode<'a>(buf: &'a [u8]) -> Result<(Packet<'a>, usize), Error> {
         | protocol::PACKET_TYPE_DISCONNECT
         | protocol::PACKET_TYPE_SUBSCRIBE
         | protocol::PACKET_TYPE_UNSUBSCRIBE
-        | protocol::PACKET_TYPE_PINGREQ
-        | protocol::PACKET_TYPE_PINGRESP => {
+        | protocol::PACKET_TYPE_PINGREQ => {
             return Err(Error::UnsupportedPacket {
                 packet_type,
                 packet_len,
