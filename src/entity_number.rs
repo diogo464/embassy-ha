@@ -1,5 +1,6 @@
 use crate::{
-    Entity, EntityCommonConfig, EntityConfig, NumberCommand, NumberState, NumberUnit, constants,
+    CommandPolicy, Entity, EntityCommonConfig, EntityConfig, NumberCommand, NumberState,
+    NumberUnit, constants,
 };
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -61,6 +62,9 @@ pub enum NumberClass {
     WindSpeed,
 }
 
+/// Configuration for a number entity.
+///
+/// See [`CommandPolicy`] for details on how commands are handled.
 #[derive(Debug)]
 pub struct NumberConfig {
     pub common: EntityCommonConfig,
@@ -70,7 +74,7 @@ pub struct NumberConfig {
     pub step: Option<f32>,
     pub mode: NumberMode,
     pub class: NumberClass,
-    pub publish_on_command: bool,
+    pub command_policy: CommandPolicy,
 }
 
 impl Default for NumberConfig {
@@ -83,7 +87,7 @@ impl Default for NumberConfig {
             step: None,
             mode: NumberMode::Auto,
             class: NumberClass::Generic,
-            publish_on_command: true,
+            command_policy: CommandPolicy::default(),
         }
     }
 }

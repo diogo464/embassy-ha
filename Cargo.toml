@@ -1,6 +1,6 @@
 [package]
 name = "embassy-ha"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 authors = ["diogo464 <diogo464@d464.sh>"]
 description = "MQTT Home Assistant integration library for Embassy async runtime"
