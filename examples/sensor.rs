@@ -51,8 +51,25 @@ async fn main_task(spawner: Spawner) {
         },
     );
 
+    let signal_strength_sensor = embassy_ha::create_sensor(
+        &device,
+        "signal-strength-sensor-id",
+        embassy_ha::SensorConfig {
+            common: embassy_ha::EntityCommonConfig {
+                name: Some("Signal Strength"),
+                category: Some(embassy_ha::EntityCategory::Diagnostic),
+                ..Default::default()
+            },
+            class: embassy_ha::SensorClass::SignalStrength,
+            state_class: embassy_ha::StateClass::Measurement,
+            unit: Some(embassy_ha::constants::HA_UNIT_SIGNAL_STRENGTH_DBM),
+            suggested_display_precision: Some(0),
+        },
+    );
+
     spawner.spawn(random_temperature_task(temperature_sensor).unwrap());
     spawner.spawn(random_humidity_task(humidity_sensor).unwrap());
+    spawner.spawn(random_signal_strength_task(signal_strength_sensor).unwrap());
 
     embassy_ha::run(&mut device, &mut stream).await.unwrap();
 }
@@ -69,6 +86,14 @@ async fn random_temperature_task(mut sensor: embassy_ha::Sensor<'static>) {
 async fn random_humidity_task(mut sensor: embassy_ha::Sensor<'static>) {
     loop {
         sensor.publish(rand::random_range(0.0..100.0));
+        Timer::after_secs(1).await;
+    }
+}
+
+#[embassy_executor::task]
+async fn random_signal_strength_task(mut sensor: embassy_ha::Sensor<'static>) {
+    loop {
+        sensor.publish(rand::random_range(-90.0..-30.0));
         Timer::after_secs(1).await;
     }
 }

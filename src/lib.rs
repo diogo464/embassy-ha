@@ -137,6 +137,9 @@ struct EntityDiscovery<'a> {
     icon: Option<&'a str>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
+    entity_category: Option<&'a str>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     entity_picture: Option<&'a str>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -771,6 +774,7 @@ pub async fn run<T: Transport>(device: &mut Device<'_>, transport: &mut T) -> Re
                 platform: entity_config.platform,
                 state_class: entity_config.state_class,
                 icon: entity_config.icon,
+                entity_category: entity_config.category,
                 entity_picture: entity_config.picture,
                 min: entity_config.min,
                 max: entity_config.max,
