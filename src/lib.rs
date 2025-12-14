@@ -1,16 +1,93 @@
-//! Home Assistant MQTT device library for embassy.
+//! MQTT Home Assistant integration library for the [Embassy](https://embassy.dev/) async runtime.
 //!
-//! To create a device use the [`new`] function.
+//! # Features
 //!
-//! After the device is created you should create one or more entities using functions such as
-//! [`create_button`]/[`create_sensor`]/...
+//! - Support for multiple entity types: sensors, buttons, switches, binary sensors, numbers, device trackers
+//! - Built on top of Embassy's async runtime for embedded systems
+//! - No-std compatible
+//! - Automatic MQTT discovery for Home Assistant
+//! - No runtime allocation
 //!
-//! Once the entities have been created either [`run`] or [`connect_and_run`] should be called in a
-//! seperate task.
+//! # Installation
 //!
-//! There are various examples you can run locally (ex: `cargo run --features tracing --example
-//! button`) assuming you have a home assistant instance running. To run the examples the
-//! environment variable `MQTT_ADDRESS` should be set to the mqtt server used by home assistant.
+//! ```bash
+//! cargo add embassy-ha
+//! ```
+//!
+//! # Quick Start
+//!
+//! This example does not compile as-is because it requires device-specific setup, but it should
+//! be easy to adapt if you already have Embassy running on your microcontroller.
+//!
+//! ```no_run
+//! use embassy_executor::Spawner;
+//! use embassy_ha::{DeviceConfig, SensorConfig, SensorClass, StateClass};
+//! use embassy_time::Timer;
+//! use static_cell::StaticCell;
+//!
+//! static HA_RESOURCES: StaticCell<embassy_ha::DeviceResources> = StaticCell::new();
+//!
+//! #[embassy_executor::main]
+//! async fn main(spawner: Spawner) {
+//!     // Initialize your network stack
+//!     // This is device specific
+//!     let stack: embassy_net::Stack<'static>;
+//! #   let stack = unsafe { core::mem::zeroed() };
+//!
+//!     // Create a Home Assistant device
+//!     let device = embassy_ha::new(
+//!         HA_RESOURCES.init(Default::default()),
+//!         DeviceConfig {
+//!             device_id: "my-device",
+//!             device_name: "My Device",
+//!             manufacturer: "ACME Corp",
+//!             model: "Model X",
+//!         },
+//!     );
+//!
+//!     // Create a temperature sensor
+//!     let sensor_config = SensorConfig {
+//!         class: SensorClass::Temperature,
+//!         state_class: StateClass::Measurement,
+//!         unit: Some(embassy_ha::constants::HA_UNIT_TEMPERATURE_CELSIUS),
+//!         ..Default::default()
+//!     };
+//!     let mut sensor = embassy_ha::create_sensor(&device, "temp-sensor", sensor_config);
+//!
+//!     // Spawn the Home Assistant communication task
+//!     spawner.spawn(ha_task(stack, device)).unwrap();
+//!
+//!     // Main loop - read and publish temperature
+//!     loop {
+//! #       let temperature = 0.0;
+//!         // let temperature = read_temperature().await;
+//!         sensor.publish(temperature);
+//!         Timer::after_secs(60).await;
+//!     }
+//! }
+//!
+//! #[embassy_executor::task]
+//! async fn ha_task(stack: embassy_net::Stack<'static>, device: embassy_ha::Device<'static>) {
+//!     embassy_ha::connect_and_run(stack, device, "mqtt-broker-address").await;
+//! }
+//! ```
+//!
+//! # Examples
+//!
+//! The repository includes several examples demonstrating different entity types. To run an example:
+//!
+//! ```bash
+//! export MQTT_ADDRESS="mqtt://your-mqtt-broker:1883"
+//! cargo run --example sensor
+//! ```
+//!
+//! Available examples:
+//! - `sensor` - Temperature and humidity sensors
+//! - `button` - Triggerable button entity
+//! - `switch` - On/off switch control
+//! - `binary_sensor` - Binary state sensor
+//! - `number` - Numeric input entity
+//! - `device_tracker` - Location tracking entity
 
 #![no_std]
 
@@ -39,6 +116,9 @@ pub mod constants;
 
 mod binary_state;
 pub use binary_state::*;
+
+mod command_policy;
+pub use command_policy::*;
 
 mod entity;
 pub use entity::*;
@@ -305,7 +385,7 @@ pub(crate) struct SwitchState {
 pub(crate) struct SwitchStorage {
     pub state: Option<SwitchState>,
     pub command: Option<SwitchCommand>,
-    pub publish_on_command: bool,
+    pub command_policy: CommandPolicy,
 }
 
 #[derive(Debug)]
@@ -350,7 +430,7 @@ pub(crate) struct NumberCommand {
 pub(crate) struct NumberStorage {
     pub state: Option<NumberState>,
     pub command: Option<NumberCommand>,
-    pub publish_on_command: bool,
+    pub command_policy: CommandPolicy,
 }
 
 #[derive(Debug, Serialize)]
@@ -594,7 +674,7 @@ pub fn create_number<'a>(
         device,
         entity_config,
         EntityStorage::Number(NumberStorage {
-            publish_on_command: config.publish_on_command,
+            command_policy: config.command_policy,
             ..Default::default()
         }),
     );
@@ -616,7 +696,7 @@ pub fn create_switch<'a>(
         device,
         entity_config,
         EntityStorage::Switch(SwitchStorage {
-            publish_on_command: config.publish_on_command,
+            command_policy: config.command_policy,
             ..Default::default()
         }),
     );
@@ -661,6 +741,49 @@ pub fn create_device_tracker<'a>(
     DeviceTracker::new(entity)
 }
 
+/// Runs the main Home Assistant device event loop.
+///
+/// This function handles MQTT communication, entity discovery, and state updates. It will run
+/// until the first error is encountered, at which point it returns immediately.
+///
+/// # Behavior
+///
+/// - Connects to the MQTT broker using the provided transport
+/// - Publishes discovery messages for all entities
+/// - Subscribes to command topics for controllable entities
+/// - Enters the main event loop to handle state updates and commands
+/// - Returns on the first error (connection loss, timeout, protocol error, etc.)
+///
+/// # Error Handling
+///
+/// This function should be called inside a retry loop, as any network error will cause this
+/// function to fail. When an error occurs, the transport may be in an invalid state and should
+/// be re-established before calling `run` again.
+///
+/// # Example
+///
+/// ```no_run
+/// # use embassy_ha::{Device, Transport};
+/// # async fn example(mut device: Device<'_>, create_transport: impl Fn() -> impl Transport) {
+/// loop {
+///     let mut transport = create_transport();
+///
+///     match embassy_ha::run(&mut device, &mut transport).await {
+///         Ok(()) => {
+///             // Normal exit (this shouldn't happen in practice)
+///             break;
+///         }
+///         Err(err) => {
+///             // Log error and retry after delay
+///             // The transport connection should be re-established
+///             embassy_time::Timer::after_secs(5).await;
+///         }
+///     }
+/// }
+/// # }
+/// ```
+///
+/// For a higher-level alternative that handles retries automatically, see [`connect_and_run`].
 pub async fn run<T: Transport>(device: &mut Device<'_>, transport: &mut T) -> Result<(), Error> {
     use core::fmt::Write;
 
@@ -1109,7 +1232,7 @@ pub async fn run<T: Transport>(device: &mut Device<'_>, transport: &mut T) -> Re
                     }
                 };
                 let timestamp = embassy_time::Instant::now();
-                if switch_storage.publish_on_command {
+                if switch_storage.command_policy == CommandPolicy::PublishState {
                     data.publish = true;
                     switch_storage.state = Some(SwitchState {
                         value: command,
@@ -1134,7 +1257,7 @@ pub async fn run<T: Transport>(device: &mut Device<'_>, transport: &mut T) -> Re
                     }
                 };
                 let timestamp = embassy_time::Instant::now();
-                if number_storage.publish_on_command {
+                if number_storage.command_policy == CommandPolicy::PublishState {
                     data.publish = true;
                     number_storage.state = Some(NumberState {
                         value: command,
@@ -1156,6 +1279,52 @@ pub async fn run<T: Transport>(device: &mut Device<'_>, transport: &mut T) -> Re
     }
 }
 
+/// High-level function that manages TCP connections and runs the device event loop with automatic retries.
+///
+/// This is a convenience wrapper around [`run`] that handles:
+/// - DNS resolution (if hostname is provided)
+/// - TCP connection establishment
+/// - Automatic reconnection on failure with 5-second delay
+/// - Infinite retry loop
+///
+/// # Arguments
+///
+/// * `stack` - The Embassy network stack for TCP connections
+/// * `device` - The Home Assistant device to run
+/// * `address` - MQTT broker address in one of these formats:
+///   - `"192.168.1.100"` - IPv4 address (uses default port 1883)
+///   - `"192.168.1.100:1883"` - IPv4 address with explicit port
+///   - `"mqtt.example.com"` - Hostname (uses default port 1883)
+///   - `"mqtt.example.com:1883"` - Hostname with explicit port
+///
+/// # Returns
+///
+/// This function never returns normally (returns `!`). It runs indefinitely, automatically
+/// reconnecting on any error.
+///
+/// # Example
+///
+/// ```no_run
+/// # use embassy_executor::Spawner;
+/// # use embassy_ha::{Device, DeviceConfig};
+/// # use static_cell::StaticCell;
+/// # static HA_RESOURCES: StaticCell<embassy_ha::DeviceResources> = StaticCell::new();
+/// #[embassy_executor::task]
+/// async fn ha_task(stack: embassy_net::Stack<'static>) {
+///     let device = embassy_ha::new(
+///         HA_RESOURCES.init(Default::default()),
+///         DeviceConfig {
+///             device_id: "my-device",
+///             device_name: "My Device",
+///             manufacturer: "ACME",
+///             model: "X",
+///         },
+///     );
+///
+///     // This function never returns
+///     embassy_ha::connect_and_run(stack, device, "mqtt.example.com:1883").await;
+/// }
+/// ```
 pub async fn connect_and_run(
     stack: embassy_net::Stack<'_>,
     mut device: Device<'_>,

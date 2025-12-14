@@ -1,5 +1,6 @@
 use crate::{
-    BinaryState, Entity, EntityCommonConfig, EntityConfig, SwitchCommand, SwitchState, constants,
+    BinaryState, CommandPolicy, Entity, EntityCommonConfig, EntityConfig, SwitchCommand,
+    SwitchState, constants,
 };
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -10,11 +11,14 @@ pub enum SwitchClass {
     Switch,
 }
 
+/// Configuration for a switch entity.
+///
+/// See [`CommandPolicy`] for details on how commands are handled.
 #[derive(Debug)]
 pub struct SwitchConfig {
     pub common: EntityCommonConfig,
     pub class: SwitchClass,
-    pub publish_on_command: bool,
+    pub command_policy: CommandPolicy,
 }
 
 impl Default for SwitchConfig {
@@ -22,7 +26,7 @@ impl Default for SwitchConfig {
         Self {
             common: Default::default(),
             class: Default::default(),
-            publish_on_command: true,
+            command_policy: CommandPolicy::default(),
         }
     }
 }
