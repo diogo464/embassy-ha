@@ -15,21 +15,13 @@ pub enum SwitchClass {
 ///
 /// See [`CommandPolicy`] for details on how commands are handled.
 #[derive(Debug)]
+#[derive(Default)]
 pub struct SwitchConfig {
     pub common: EntityCommonConfig,
     pub class: SwitchClass,
     pub command_policy: CommandPolicy,
 }
 
-impl Default for SwitchConfig {
-    fn default() -> Self {
-        Self {
-            common: Default::default(),
-            class: Default::default(),
-            command_policy: CommandPolicy::default(),
-        }
-    }
-}
 
 impl SwitchConfig {
     pub(crate) fn populate(&self, config: &mut EntityConfig) {
