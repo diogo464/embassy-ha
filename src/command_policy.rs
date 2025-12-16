@@ -64,16 +64,13 @@
 /// # async fn turn_on_motor() -> Result<(), ()> { Ok(()) }
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum CommandPolicy {
     /// Automatically publish the entity's state when a command is received.
+    #[default]
     PublishState,
 
     /// Do not automatically publish state. The application must manually update the state.
     Manual,
 }
 
-impl Default for CommandPolicy {
-    fn default() -> Self {
-        Self::PublishState
-    }
-}

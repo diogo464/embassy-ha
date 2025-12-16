@@ -1047,7 +1047,7 @@ pub async fn run<T: Transport>(device: &mut Device<'_>, transport: &mut T) -> Re
                             .resize(device.publish_buffer.capacity(), 0)
                             .expect("resize to capacity should never fail");
                         let n =
-                            serde_json_core::to_slice(&tracker_state, &mut device.publish_buffer)
+                            serde_json_core::to_slice(&tracker_state, device.publish_buffer)
                                 .expect("publish buffer too small for tracker state payload");
                         device.publish_buffer.truncate(n);
                     }
