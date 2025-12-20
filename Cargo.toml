@@ -25,7 +25,7 @@ defmt = { version = "1", optional = true }
 tracing = { version = "0.1", optional = true, default-features = false }
 embassy-sync = { git = "https://github.com/embassy-rs/embassy" }
 embassy-futures = { git = "https://github.com/embassy-rs/embassy" }
-embedded-io-async = { version = "0.6" }
+embedded-io-async = { version = "0.7" }
 
 [dev-dependencies]
 embassy-time = { git = "https://github.com/embassy-rs/embassy", features = ["std"] }
