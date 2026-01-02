@@ -9,6 +9,7 @@ repository = "https://github.com/diogo464/embassy-ha"
 readme = "README.md"
 keywords = ["homeassistant", "mqtt", "iot", "embedded", "embassy"]
 categories = ["embedded", "network-programming"]
+rust-version = "1.91.1"
 
 [features]
 default = []
