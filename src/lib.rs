@@ -928,7 +928,14 @@ pub async fn run<T: Transport>(device: &mut Device<'_>, transport: &mut T) -> Re
         crate::log::debug!("sending discovery to topic '{}'", discovery_topic);
         match embassy_time::with_timeout(
             MQTT_TIMEOUT,
-            client.publish(discovery_topic, device.discovery_buffer),
+            client.publish_with(
+                discovery_topic,
+                device.discovery_buffer,
+                mqtt::PublishParams {
+                    retain: true,
+                    ..Default::default()
+                },
+            ),
         )
         .await
         {
