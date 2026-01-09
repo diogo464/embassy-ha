@@ -1,5 +1,9 @@
 #![allow(unused)]
 
+pub const HA_STATUS_TOPIC: &str = "homeassistant/status";
+pub const HA_STATUS_PAYLOAD_ONLINE: &str = "online";
+pub const HA_STATUS_PAYLOAD_OFFLINE: &str = "offline";
+
 pub const HA_DOMAIN_SENSOR: &str = "sensor";
 pub const HA_DOMAIN_BINARY_SENSOR: &str = "binary_sensor";
 pub const HA_DOMAIN_SWITCH: &str = "switch";
