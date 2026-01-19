@@ -181,11 +181,33 @@ struct DeviceDiscovery<'a> {
     model: &'a str,
 }
 
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(Format))]
+struct EntityIdDiscovery<'a> {
+    device_id: &'a str,
+    entity_id: &'a str,
+}
+
+impl<'a> core::fmt::Display for EntityIdDiscovery<'a> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}_{}", self.device_id, self.entity_id)
+    }
+}
+
+impl<'a> Serialize for EntityIdDiscovery<'a> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.collect_str(self)
+    }
+}
+
 #[derive(Debug, Serialize)]
 #[cfg_attr(feature = "defmt", derive(Format))]
 struct EntityDiscovery<'a> {
     #[serde(rename = "unique_id")]
-    id: &'a str,
+    id: EntityIdDiscovery<'a>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     name: Option<&'a str>,
@@ -1006,7 +1028,10 @@ fn generate_entity_discovery(
     };
 
     let discovery = EntityDiscovery {
-        id: entity_config.id,
+        id: EntityIdDiscovery {
+            device_id: device_config.device_id,
+            entity_id: entity_config.id,
+        },
         name: entity_config.name,
         device_class: entity_config.device_class,
         state_topic: Some(buffers.state_topic.as_str()),
@@ -1332,11 +1357,10 @@ pub async fn run<T: Transport>(device: &mut Device<'_>, transport: &mut T) -> Re
 
         let mut read_buffer = [0u8; 128];
         let data_len = publish.data_len;
-        let receive_data =
-            match mqtt_receive_data(&mut client, data_len, &mut read_buffer).await {
-                Ok(data) => data,
-                Err(_) => continue 'outer_loop,
-            };
+        let receive_data = match mqtt_receive_data(&mut client, data_len, &mut read_buffer).await {
+            Ok(data) => data,
+            Err(_) => continue 'outer_loop,
+        };
 
         let command = match str::from_utf8(receive_data) {
             Ok(command) => command,
