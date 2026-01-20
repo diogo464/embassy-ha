@@ -93,6 +93,10 @@ impl embedded_io_async::Write for AsyncTcp {
         self.write_handle.thread().unpark();
         Ok(buf.len())
     }
+
+    async fn flush(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
 }
 
 impl embedded_io_async::Read for AsyncTcp {
