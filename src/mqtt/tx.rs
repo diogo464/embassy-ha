@@ -209,4 +209,3 @@ pub fn pingreq(buffer: &mut FieldBuffer) {
     )));
     buffer.push(Field::VarInt(0));
 }
-

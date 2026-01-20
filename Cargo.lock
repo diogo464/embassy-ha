@@ -175,7 +175,7 @@ source = "git+https://github.com/embassy-rs/embassy#dd4b0ae19e97101dab86af061e69
 
 [[package]]
 name = "embassy-ha"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "critical-section",
  "defmt 1.0.1",

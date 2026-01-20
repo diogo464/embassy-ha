@@ -346,6 +346,7 @@ pub struct DeviceConfig {
     pub model: &'static str,
 }
 
+#[derive(Default)]
 pub struct DeviceBuffersOwned {
     pub publish: Vec<u8, 2048>,
     pub subscribe: Vec<u8, 128>,
@@ -355,21 +356,6 @@ pub struct DeviceBuffersOwned {
     pub state_topic: String<128>,
     pub command_topic: String<128>,
     pub attributes_topic: String<128>,
-}
-
-impl Default for DeviceBuffersOwned {
-    fn default() -> Self {
-        Self {
-            publish: Default::default(),
-            subscribe: Default::default(),
-            discovery: Default::default(),
-            availability_topic: Default::default(),
-            discovery_topic: Default::default(),
-            state_topic: Default::default(),
-            command_topic: Default::default(),
-            attributes_topic: Default::default(),
-        }
-    }
 }
 
 impl DeviceBuffersOwned {
@@ -1093,10 +1079,8 @@ fn generate_entity_discovery(
 ///
 /// ```no_run
 /// # use embassy_ha::{Device, Transport};
-/// # async fn example(mut device: Device<'_>, create_transport: impl Fn() -> impl Transport) {
+/// # async fn example(mut device: Device<'_>, mut transport: impl Transport) {
 /// loop {
-///     let mut transport = create_transport();
-///
 ///     match embassy_ha::run(&mut device, &mut transport).await {
 ///         Ok(()) => {
 ///             // Normal exit (this shouldn't happen in practice)
