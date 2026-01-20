@@ -37,7 +37,9 @@ impl From<varint::Error> for Error {
     fn from(value: varint::Error) -> Self {
         match value {
             varint::Error::NeedMoreData => Self::NeedMoreData,
-            varint::Error::InvalidVarInt => Self::InvalidPacket("invalid variable integer encoding"),
+            varint::Error::InvalidVarInt => {
+                Self::InvalidPacket("invalid variable integer encoding")
+            }
         }
     }
 }
@@ -92,8 +94,10 @@ pub fn decode<'a>(buf: &'a [u8]) -> Result<(Packet<'a>, usize), Error> {
         protocol::PACKET_TYPE_PUBLISH => {
             // Extract flags from the fixed header
             let retain = (packet_flags & protocol::PUBLISH_FLAG_RETAIN) != 0;
-            let qos_value = (packet_flags & protocol::PUBLISH_FLAG_QOS_MASK) >> protocol::PUBLISH_FLAG_QOS_SHIFT;
-            let qos = Qos::from_u8(qos_value).ok_or(Error::InvalidPacket("PUBLISH has invalid QoS value"))?;
+            let qos_value = (packet_flags & protocol::PUBLISH_FLAG_QOS_MASK)
+                >> protocol::PUBLISH_FLAG_QOS_SHIFT;
+            let qos = Qos::from_u8(qos_value)
+                .ok_or(Error::InvalidPacket("PUBLISH has invalid QoS value"))?;
             let dup = (packet_flags & protocol::PUBLISH_FLAG_DUP) != 0;
 
             // Track position after fixed header to calculate data length
@@ -113,7 +117,9 @@ pub fn decode<'a>(buf: &'a [u8]) -> Result<(Packet<'a>, usize), Error> {
             let variable_header_len = reader.num_read() - variable_header_start;
             let data_len = (packet_len as usize)
                 .checked_sub(variable_header_len)
-                .ok_or(Error::InvalidPacket("PUBLISH remaining length is too short for headers"))?;
+                .ok_or(Error::InvalidPacket(
+                    "PUBLISH remaining length is too short for headers",
+                ))?;
 
             Packet::Publish {
                 topic,
@@ -140,7 +146,9 @@ pub fn decode<'a>(buf: &'a [u8]) -> Result<(Packet<'a>, usize), Error> {
             }
             if packet_len < 3 {
                 // Minimum: 2 bytes packet ID + 1 byte return code
-                return Err(Error::InvalidPacket("SUBACK remaining length must be at least 3"));
+                return Err(Error::InvalidPacket(
+                    "SUBACK remaining length must be at least 3",
+                ));
             }
             let packet_id = PacketId::from(reader.read_u16()?);
             let return_code = reader.read_u8()?;

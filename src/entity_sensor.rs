@@ -18,8 +18,7 @@ impl StateClass {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SensorClass {
     #[default]
     Generic,
@@ -76,7 +75,6 @@ pub enum SensorClass {
     WindSpeed,
     Other(&'static str),
 }
-
 
 impl SensorClass {
     pub fn as_str(&self) -> Option<&'static str> {

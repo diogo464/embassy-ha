@@ -14,14 +14,12 @@ pub enum SwitchClass {
 /// Configuration for a switch entity.
 ///
 /// See [`CommandPolicy`] for details on how commands are handled.
-#[derive(Debug)]
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct SwitchConfig {
     pub common: EntityCommonConfig,
     pub class: SwitchClass,
     pub command_policy: CommandPolicy,
 }
-
 
 impl SwitchConfig {
     pub(crate) fn populate(&self, config: &mut EntityConfig) {
