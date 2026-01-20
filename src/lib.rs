@@ -346,6 +346,7 @@ pub struct DeviceConfig {
     pub model: &'static str,
 }
 
+#[derive(Default)]
 pub struct DeviceBuffersOwned {
     pub publish: Vec<u8, 2048>,
     pub subscribe: Vec<u8, 128>,
@@ -355,21 +356,6 @@ pub struct DeviceBuffersOwned {
     pub state_topic: String<128>,
     pub command_topic: String<128>,
     pub attributes_topic: String<128>,
-}
-
-impl Default for DeviceBuffersOwned {
-    fn default() -> Self {
-        Self {
-            publish: Default::default(),
-            subscribe: Default::default(),
-            discovery: Default::default(),
-            availability_topic: Default::default(),
-            discovery_topic: Default::default(),
-            state_topic: Default::default(),
-            command_topic: Default::default(),
-            attributes_topic: Default::default(),
-        }
-    }
 }
 
 impl DeviceBuffersOwned {
