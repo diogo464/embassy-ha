@@ -1079,10 +1079,8 @@ fn generate_entity_discovery(
 ///
 /// ```no_run
 /// # use embassy_ha::{Device, Transport};
-/// # async fn example(mut device: Device<'_>, create_transport: impl Fn() -> impl Transport) {
+/// # async fn example(mut device: Device<'_>, mut transport: impl Transport) {
 /// loop {
-///     let mut transport = create_transport();
-///
 ///     match embassy_ha::run(&mut device, &mut transport).await {
 ///         Ok(()) => {
 ///             // Normal exit (this shouldn't happen in practice)
