@@ -172,6 +172,12 @@ impl Error {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct ConnectParams<'a> {
+    pub username: Option<&'a str>,
+    pub password: Option<&'a [u8]>,
+}
+
 #[derive(Debug, Clone, Copy, Serialize)]
 #[cfg_attr(feature = "defmt", derive(Format))]
 struct DeviceDiscovery<'a> {
@@ -1098,6 +1104,14 @@ fn generate_entity_discovery(
 ///
 /// For a higher-level alternative that handles retries automatically, see [`connect_and_run`].
 pub async fn run<T: Transport>(device: &mut Device<'_>, transport: &mut T) -> Result<(), Error> {
+    run_with(device, transport, Default::default()).await
+}
+
+pub async fn run_with<T: Transport>(
+    device: &mut Device<'_>,
+    transport: &mut T,
+    params: ConnectParams<'_>,
+) -> Result<(), Error> {
     use core::fmt::Write;
 
     device.buffers.availability_topic.clear();
@@ -1125,6 +1139,8 @@ pub async fn run<T: Transport>(device: &mut Device<'_>, transport: &mut T) -> Re
         will_payload: Some(NOT_AVAILABLE_PAYLOAD.as_bytes()),
         will_retain: true,
         keepalive: Some(DEFAULT_KEEPALIVE_TIME),
+        username: params.username,
+        password: params.password,
         ..Default::default()
     };
     match embassy_time::with_timeout(
@@ -1479,8 +1495,17 @@ pub async fn run<T: Transport>(device: &mut Device<'_>, transport: &mut T) -> Re
 /// ```
 pub async fn connect_and_run(
     stack: embassy_net::Stack<'_>,
+    device: Device<'_>,
+    address: &str,
+) -> ! {
+    connect_and_run_with(stack, device, address, Default::default()).await
+}
+
+pub async fn connect_and_run_with(
+    stack: embassy_net::Stack<'_>,
     mut device: Device<'_>,
     address: &str,
+    params: ConnectParams<'_>,
 ) -> ! {
     const DEFAULT_MQTT_PORT: u16 = 1883;
 
@@ -1579,7 +1604,7 @@ pub async fn connect_and_run(
 
         socket.set_timeout(None);
 
-        if let Err(err) = run(&mut device, &mut socket).await {
+        if let Err(err) = run_with(&mut device, &mut socket, params.clone()).await {
             crate::log::error!(
                 "Device run failed with: {:?}",
                 crate::log::Debug2Format(&err)
