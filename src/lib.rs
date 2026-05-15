@@ -1141,7 +1141,6 @@ pub async fn run_with<T: Transport>(
         keepalive: Some(DEFAULT_KEEPALIVE_TIME),
         username: params.username,
         password: params.password,
-        ..Default::default()
     };
     match embassy_time::with_timeout(
         MQTT_TIMEOUT,
