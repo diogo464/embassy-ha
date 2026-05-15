@@ -24,7 +24,7 @@ serde-json-core = "0.6"
 serde = { version = "1", default-features = false, features = ["derive"] }
 defmt = { version = "1", optional = true }
 tracing = { version = "0.1", optional = true, default-features = false }
-embassy-sync = { version = "0.7" }
+embassy-sync = { version = "0.8.0" }
 embassy-futures = "0.1"
 embedded-io-async = "0.7"
 
