@@ -17,13 +17,16 @@ Create a new cargo release for embassy-ha.
 
 4. **Update version in Cargo.toml** - Only after all pre-release checks pass, update the `version` field in `Cargo.toml` to the new version.
 
-5. **Create release commit** - Create a commit with the message: `chore: release v{version}`
+5. **Refresh lockfile** - Run `cargo build` after updating `Cargo.toml` to ensure `Cargo.lock` is up to date.
 
-6. **Create tag** - Create an annotated tag with the name `v{version}` and message `v{version}`
+6. **Create release commit** - Commit both `Cargo.toml` and `Cargo.lock` with the message: `chore: release v{version}`
 
-7. **Push to remote** - Push both the commit and the tag to the remote:
-   - `git push`
-   - `git push --tags`
+7. **Create tag** - Create an annotated tag with the name `v{version}` and message `v{version}`
+
+8. **Push to all remotes** - Push both the commit and the tag to every configured git remote.
+   - For each remote returned by `git remote`:
+     - `git push <remote>`
+     - `git push <remote> --tags`
 
 ## Important Notes
 
@@ -31,6 +34,7 @@ Create a new cargo release for embassy-ha.
   - Attempt to fix the issues automatically (e.g., running `cargo fmt` to fix formatting)
   - Update the version in Cargo.toml
   - Create the commit or tag
+- After bumping the version, run `cargo build` before committing so `Cargo.lock` is updated and included in the release commit
 - The user is responsible for fixing any issues and re-running the release command
 - The tag format must be `v{version}` (e.g., `v0.3.0`) to match existing conventions
 - Use `--dry-run` for cargo publish to verify without actually publishing
