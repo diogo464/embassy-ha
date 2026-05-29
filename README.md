@@ -91,6 +91,7 @@ Available examples:
 - `binary_sensor` - Binary state sensor
 - `number` - Numeric input entity
 - `device_tracker` - Location tracking entity
+- `light` - Light with brightness, color temperature, and RGB support
 
 ## License
 
