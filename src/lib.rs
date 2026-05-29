@@ -1571,13 +1571,21 @@ pub async fn run_with<T: Transport>(
                 if light_storage.command_policy == CommandPolicy::PublishState {
                     let current_on = light_storage.state.as_ref().map(|s| s.on).unwrap_or(false);
                     let current_brightness = light_storage.state.as_ref().and_then(|s| s.brightness);
-                    let current_color_temp = light_storage.state.as_ref().and_then(|s| s.color_temp);
-                    let current_color = light_storage.state.as_ref().and_then(|s| s.color);
+                    let new_color = cmd.color.map(|c| LightColor { r: c.r, g: c.g, b: c.b });
+                    // color and color_temp are mutually exclusive modes; setting one clears the other
+                    let (new_color_temp, new_color) = match (cmd.color_temp, new_color) {
+                        (Some(ct), _) => (Some(ct), None),
+                        (None, Some(c)) => (None, Some(c)),
+                        (None, None) => (
+                            light_storage.state.as_ref().and_then(|s| s.color_temp),
+                            light_storage.state.as_ref().and_then(|s| s.color),
+                        ),
+                    };
                     light_storage.state = Some(LightState {
                         on: new_state.unwrap_or(current_on),
                         brightness: cmd.brightness.or(current_brightness),
-                        color_temp: cmd.color_temp.or(current_color_temp),
-                        color: cmd.color.map(|c| LightColor { r: c.r, g: c.g, b: c.b }).or(current_color),
+                        color_temp: new_color_temp,
+                        color: new_color,
                     });
                     data.publish = true;
                 }
