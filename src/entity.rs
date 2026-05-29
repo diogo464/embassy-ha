@@ -35,4 +35,10 @@ pub(crate) struct EntityConfig {
     pub step: Option<f32>,
     pub mode: Option<&'static str>,
     pub suggested_display_precision: Option<u8>,
+    pub light_brightness: bool,
+    pub light_color_temp: bool,
+    pub light_rgb: bool,
+    pub light_min_mireds: Option<u16>,
+    pub light_max_mireds: Option<u16>,
+    pub light_color_modes: Option<&'static [&'static str]>,
 }

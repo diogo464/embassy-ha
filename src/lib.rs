@@ -141,6 +141,9 @@ pub use entity_number::*;
 mod entity_sensor;
 pub use entity_sensor::*;
 
+mod entity_light;
+pub use entity_light::*;
+
 mod entity_switch;
 pub use entity_switch::*;
 
@@ -265,6 +268,18 @@ struct EntityDiscovery<'a> {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     suggested_display_precision: Option<u8>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    brightness: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    min_mireds: Option<u16>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    max_mireds: Option<u16>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    supported_color_modes: Option<&'a [&'a str]>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     availability_topic: Option<&'a str>,
@@ -507,9 +522,43 @@ pub(crate) struct DeviceTrackerState {
     pub gps_accuracy: Option<f32>,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy)]
+struct LightColorPayload {
+    r: u8,
+    g: u8,
+    b: u8,
+}
+
+#[derive(serde::Serialize)]
+struct LightStatePayload<'a> {
+    state: &'a str,
+    color_mode: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    brightness: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    color_temp: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    color: Option<LightColorPayload>,
+}
+
+#[derive(serde::Deserialize)]
+struct LightCommandPayload<'a> {
+    state: Option<&'a str>,
+    brightness: Option<u8>,
+    color_temp: Option<u16>,
+    color: Option<LightColorPayload>,
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct DeviceTrackerStorage {
     pub state: Option<DeviceTrackerState>,
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct LightStorage {
+    pub state: Option<LightState>,
+    pub command: Option<LightCommand>,
+    pub command_policy: CommandPolicy,
 }
 
 #[derive(Debug)]
@@ -520,6 +569,7 @@ pub(crate) enum EntityStorage {
     NumericSensor(NumericSensorStorage),
     Number(NumberStorage),
     DeviceTracker(DeviceTrackerStorage),
+    Light(LightStorage),
 }
 
 impl EntityStorage {
@@ -562,6 +612,13 @@ impl EntityStorage {
         match self {
             EntityStorage::DeviceTracker(storage) => storage,
             _ => panic!("expected storage type to be device tracker"),
+        }
+    }
+
+    pub fn as_light_mut(&mut self) -> &mut LightStorage {
+        match self {
+            EntityStorage::Light(storage) => storage,
+            _ => panic!("expected storage type to be light"),
         }
     }
 }
@@ -791,6 +848,24 @@ pub fn create_device_tracker<'a>(
         EntityStorage::DeviceTracker(Default::default()),
     );
     DeviceTracker::new(entity)
+}
+
+pub fn create_light<'a>(device: &Device<'a>, id: &'static str, config: LightConfig) -> Light<'a> {
+    let mut entity_config = EntityConfig {
+        id,
+        ..Default::default()
+    };
+    config.populate(&mut entity_config);
+
+    let entity = create_entity(
+        device,
+        entity_config,
+        EntityStorage::Light(LightStorage {
+            command_policy: config.command_policy,
+            ..Default::default()
+        }),
+    );
+    Light::new(entity)
 }
 
 async fn device_mqtt_subscribe<T: Transport>(
@@ -1041,6 +1116,10 @@ fn generate_entity_discovery(
         step: entity_config.step,
         mode: entity_config.mode,
         suggested_display_precision: entity_config.suggested_display_precision,
+        brightness: entity_config.light_brightness.then_some(true),
+        min_mireds: entity_config.light_min_mireds,
+        max_mireds: entity_config.light_max_mireds,
+        supported_color_modes: entity_config.light_color_modes,
         availability_topic: Some(availability_topic),
         payload_available: Some(AVAILABLE_PAYLOAD),
         payload_not_available: Some(NOT_AVAILABLE_PAYLOAD),
@@ -1241,6 +1320,39 @@ pub async fn run_with<T: Transport>(
                             .expect("publish buffer too small for tracker state payload");
                         device.buffers.publish.truncate(n);
                     }
+                    EntityStorage::Light(LightStorage {
+                        state: Some(light_state),
+                        ..
+                    }) => {
+                        let color_mode = if light_state.color.is_some() {
+                            "rgb"
+                        } else if light_state.color_temp.is_some() {
+                            "color_temp"
+                        } else if light_state.brightness.is_some() {
+                            "brightness"
+                        } else {
+                            "onoff"
+                        };
+                        let payload = LightStatePayload {
+                            state: if light_state.on { "ON" } else { "OFF" },
+                            color_mode,
+                            brightness: light_state.brightness,
+                            color_temp: light_state.color_temp,
+                            color: light_state.color.map(|c| LightColorPayload {
+                                r: c.r,
+                                g: c.g,
+                                b: c.b,
+                            }),
+                        };
+                        device
+                            .buffers
+                            .publish
+                            .resize(device.buffers.publish.capacity(), 0)
+                            .expect("resize to capacity should never fail");
+                        let n = serde_json_core::to_slice(&payload, device.buffers.publish)
+                            .expect("publish buffer too small for light state payload");
+                        device.buffers.publish.truncate(n);
+                    }
                     _ => {
                         if !first_iteration_push {
                             crate::log::warn!(
@@ -1434,6 +1546,46 @@ pub async fn run_with<T: Transport>(
                 number_storage.command = Some(NumberCommand {
                     value: command,
                     timestamp,
+                });
+            }
+            EntityStorage::Light(light_storage) => {
+                let (cmd, _) = match serde_json_core::from_slice::<LightCommandPayload>(receive_data) {
+                    Ok(r) => r,
+                    Err(_) => {
+                        crate::log::warn!(
+                            "light '{}' received invalid JSON command, ignoring it",
+                            data.config.id
+                        );
+                        continue 'outer_loop;
+                    }
+                };
+                let new_state = cmd.state.and_then(|s| {
+                    if s.eq_ignore_ascii_case("on") {
+                        Some(true)
+                    } else if s.eq_ignore_ascii_case("off") {
+                        Some(false)
+                    } else {
+                        None
+                    }
+                });
+                if light_storage.command_policy == CommandPolicy::PublishState {
+                    let current_on = light_storage.state.as_ref().map(|s| s.on).unwrap_or(false);
+                    let current_brightness = light_storage.state.as_ref().and_then(|s| s.brightness);
+                    let current_color_temp = light_storage.state.as_ref().and_then(|s| s.color_temp);
+                    let current_color = light_storage.state.as_ref().and_then(|s| s.color);
+                    light_storage.state = Some(LightState {
+                        on: new_state.unwrap_or(current_on),
+                        brightness: cmd.brightness.or(current_brightness),
+                        color_temp: cmd.color_temp.or(current_color_temp),
+                        color: cmd.color.map(|c| LightColor { r: c.r, g: c.g, b: c.b }).or(current_color),
+                    });
+                    data.publish = true;
+                }
+                light_storage.command = Some(LightCommand {
+                    state: new_state,
+                    brightness: cmd.brightness,
+                    color_temp: cmd.color_temp,
+                    color: cmd.color.map(|c| LightColor { r: c.r, g: c.g, b: c.b }),
                 });
             }
             _ => continue 'outer_loop,
