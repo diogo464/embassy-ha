@@ -76,7 +76,12 @@ impl<'a> Switch<'a> {
                 value: state,
                 timestamp,
             });
-            publish
+            // don't avoid publishing the state if the new state
+            // matches the last command when in Manual CommandPolicy
+            match storage.command_policy {
+                CommandPolicy::PublishState => publish,
+                CommandPolicy::Manual => true,
+            }
         });
         if publish {
             self.0.queue_publish();
