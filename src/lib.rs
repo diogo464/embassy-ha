@@ -403,23 +403,23 @@ impl<'a> DeviceBuffers<'a> {
     }
 }
 
-pub struct DeviceResources {
+pub struct DeviceResources<const N :usize = 16> {
     waker: AtomicWaker,
-    entities: [RefCell<Option<EntityData>>; Self::ENTITY_LIMIT],
+    entities: [RefCell<Option<EntityData>>; N],
 
     mqtt_resources: mqtt::ClientResources,
     buffers: DeviceBuffersOwned,
 }
 
-impl DeviceResources {
-    const ENTITY_LIMIT: usize = 16;
+impl<const N: usize> DeviceResources<N> {
+    pub const ENTITY_LIMIT: usize = N;
 }
 
-impl Default for DeviceResources {
+impl<const N: usize>  Default for DeviceResources<N> {
     fn default() -> Self {
         Self {
             waker: AtomicWaker::new(),
-            entities: [const { RefCell::new(None) }; Self::ENTITY_LIMIT],
+            entities: [const { RefCell::new(None) }; N],
 
             mqtt_resources: Default::default(),
             buffers: Default::default(),
@@ -633,7 +633,10 @@ pub struct Device<'a> {
     buffers: DeviceBuffers<'a>,
 }
 
-pub fn new<'a>(resources: &'a mut DeviceResources, config: DeviceConfig) -> Device<'a> {
+pub fn new<'a, const N: usize>(
+    resources: &'a mut DeviceResources<N>,
+    config: DeviceConfig,
+) -> Device<'a> {
     Device {
         config,
         waker: &resources.waker,
