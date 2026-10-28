@@ -403,7 +403,7 @@ impl<'a> DeviceBuffers<'a> {
     }
 }
 
-pub struct DeviceResources<const N :usize = 16> {
+pub struct DeviceResources<const N: usize = 16> {
     waker: AtomicWaker,
     entities: [RefCell<Option<EntityData>>; N],
 
@@ -415,7 +415,7 @@ impl<const N: usize> DeviceResources<N> {
     pub const ENTITY_LIMIT: usize = N;
 }
 
-impl<const N: usize>  Default for DeviceResources<N> {
+impl<const N: usize> Default for DeviceResources<N> {
     fn default() -> Self {
         Self {
             waker: AtomicWaker::new(),
