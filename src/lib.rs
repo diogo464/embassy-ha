@@ -653,8 +653,8 @@ fn create_entity<'a>(
     storage: EntityStorage,
 ) -> Entity<'a> {
     let index = 'outer: {
-        for idx in 0..device.entities.len() {
-            if device.entities[idx].borrow().is_none() {
+        for (idx, entity) in device.entities.iter().enumerate() {
+            if entity.borrow().is_none() {
                 break 'outer idx;
             }
         }

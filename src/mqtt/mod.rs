@@ -366,10 +366,10 @@ where
                         }
                     }
                     rx::Error::InvalidPacket(msg) => return Err(Error::Protocol(msg)),
-                    rx::Error::UnsupportedPacket { packet_type: _, .. } => {
+                    rx::Error::UnsupportedPacket { .. } => {
                         return Err(Error::Protocol("unsupported packet type"));
                     }
-                    rx::Error::UnknownPacket { packet_type: _, .. } => {
+                    rx::Error::UnknownPacket { .. } => {
                         return Err(Error::Protocol("unknown packet type"));
                     }
                 },
