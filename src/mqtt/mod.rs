@@ -418,6 +418,8 @@ where
         let from_transport = self.rx_buffer_data.strict_sub(from_buffer);
 
         buf[..from_buffer].copy_from_slice(&self.rx_buffer[..from_buffer]);
+        self.rx_buffer
+            .copy_within(from_buffer..self.rx_buffer_len, 0);
         self.rx_buffer_len -= from_buffer;
 
         if from_transport > 0 {
