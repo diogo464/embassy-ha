@@ -480,15 +480,13 @@ where
 
         assert_eq!(self.rx_buffer_skip, 0);
         while self.rx_buffer_data > 0 {
-            if self.rx_buffer_len <= self.rx_buffer_data {
-                self.rx_buffer_data -= self.rx_buffer_len;
-                self.rx_buffer_len = 0;
-            } else {
-                self.rx_buffer.copy_within(self.rx_buffer_data.., 0);
-                self.rx_buffer_len -= self.rx_buffer_data;
-                self.rx_buffer_data = 0;
+            if self.rx_buffer_len == 0 {
+                self.fill_rx_buffer().await?;
             }
-            self.fill_rx_buffer().await?;
+            let discarded = self.rx_buffer_data.min(self.rx_buffer_len);
+            self.rx_buffer.copy_within(discarded..self.rx_buffer_len, 0);
+            self.rx_buffer_len -= discarded;
+            self.rx_buffer_data -= discarded;
         }
 
         Ok(())
