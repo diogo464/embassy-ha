@@ -10,6 +10,9 @@ mod transport;
 mod tx;
 mod varint;
 
+#[cfg(test)]
+mod tests;
+
 pub use connect_code::ConnectCode;
 use embedded_io_async::ReadExactError;
 pub use packet_id::PacketId;
